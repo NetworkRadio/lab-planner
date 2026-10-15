@@ -1,0 +1,1860 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lab Network Planner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f4e9c'/%3E%3Ccircle cx='16' cy='14' r='5' fill='none' stroke='white' stroke-width='2.5'/%3E%3Cpath d='M16 27l-7-9h14z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+html,body{margin:0}
+/* Layout: header and filters on top, KPI strip, then a sticky map beside a tabbed decision panel. */
+:root {
+  --bg: #f1f4f9; --surface: #ffffff; --surface-2: #e9eef6; --surface-3: #dde5f0;
+  --ink: #111a2b; --ink-2: #434e66; --ink-3: #66718a; --line: #d9e0ec; --line-2: #c3cddd;
+  --accent: #2a78d6; --accent-ink: #ffffff; --accent-soft: #e2edfb;
+  --map-bg: #e7edf5; --grid: #d1dae8; --ord: #5d6e8f; --gap: #d4417d; --violet: #6250d6; --orange: #eb6834;
+  --good: #0ca30c; --good-ink: #07700a; --warn: #fab219; --warn-ink: #8a5a00; --serious: #ec835a; --serious-ink: #a8431c; --crit: #d03b3b; --crit-ink: #a52828;
+  --shadow: 0 6px 24px rgba(17, 26, 43, .14);
+  --f-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e131c; --surface: #161c28; --surface-2: #1d2533; --surface-3: #283248;
+    --ink: #e8edf6; --ink-2: #b2bcd0; --ink-3: #8b95ac; --line: #273044; --line-2: #36425a;
+    --accent: #3987e5; --accent-ink: #0b1220; --accent-soft: #15294a;
+    --map-bg: #0f1520; --grid: #1b2536; --ord: #93a4c4; --gap: #ea6ba1; --violet: #9085e9; --orange: #d95926;
+    --good-ink: #52d052; --warn-ink: #f0b93a; --serious-ink: #f0997a; --crit-ink: #ef7d7d;
+    --shadow: 0 6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e131c; --surface: #161c28; --surface-2: #1d2533; --surface-3: #283248;
+  --ink: #e8edf6; --ink-2: #b2bcd0; --ink-3: #8b95ac; --line: #273044; --line-2: #36425a;
+  --accent: #3987e5; --accent-ink: #0b1220; --accent-soft: #15294a;
+  --map-bg: #0f1520; --grid: #1b2536; --ord: #93a4c4; --gap: #ea6ba1; --violet: #9085e9; --orange: #d95926;
+  --good-ink: #52d052; --warn-ink: #f0b93a; --serious-ink: #f0997a; --crit-ink: #ef7d7d;
+  --shadow: 0 6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-sans); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.app { max-width: 1680px; margin: 0 auto; padding-block: 14px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 12px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.top h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+.top .sub { margin: 2px 0 0; color: var(--ink-3); font-size: 13px; }
+.top .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.sm { padding: 4px 9px; font-size: 12px; }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; border: 1px solid var(--line); }
+.badge.sample { background: color-mix(in srgb, var(--warn) 18%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); color: var(--ink); }
+
+/* filters */
+.filters { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field > label, .field > .lab { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.input, details.dd > summary { height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); font-size: 13px; display: flex; align-items: center; min-width: 140px; }
+.input[type=date] { min-width: 140px; }
+.input:disabled { opacity: .5; }
+details.dd { position: relative; }
+details.dd > summary { list-style: none; cursor: pointer; justify-content: space-between; gap: 8px; }
+details.dd > summary::-webkit-details-marker { display: none; }
+details.dd > summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: rotate(45deg) translateY(-2px); flex: none; }
+.dd-pop { position: absolute; z-index: 40; top: 36px; left: 0; width: 270px; max-width: 86vw; max-height: 340px; overflow: auto; background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow); padding: 8px; }
+.dd-pop .row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 4px; font-size: 13px; cursor: pointer; }
+.dd-pop .row:hover { background: var(--surface-2); }
+.dd-pop .row .n { margin-left: auto; color: var(--ink-3); font-size: 12px; }
+.dd-pop .q { width: 100%; margin-bottom: 6px; }
+.dd-pop .foot { display: flex; justify-content: space-between; padding: 6px 4px 0; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+
+/* summary */
+.headline { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 120ch; text-wrap: pretty; }
+.headline b { color: var(--ink); font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.tile .l { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.tile .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 23px; font-weight: 500; margin: 2px 0; letter-spacing: -.02em; }
+.tile .v small { font-size: 13px; color: var(--ink-3); font-weight: 400; margin-left: 3px; }
+.tile .s { font-size: 12px; color: var(--ink-3); }
+
+/* main grid */
+.grid { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.mapcard { position: sticky; top: 8px; height: calc(100vh - 20px); max-height: 800px; min-height: 480px; background: var(--map-bg); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; touch-action: none; }
+.mapcard canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+.mapcard canvas.drag { cursor: grabbing; }
+.mt { position: absolute; display: flex; gap: 6px; flex-wrap: wrap; z-index: 3; }
+.mt.tl { top: 10px; left: 10px; right: 56px; }
+.mt.tr { top: 10px; right: 10px; flex-direction: column; }
+.chip { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--surface) 92%, transparent); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.zbtn { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--surface); font-size: 16px; line-height: 1; display: grid; place-items: center; }
+.zbtn:hover { background: var(--surface-2); }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 0 10px; height: 26px; font-size: 12px; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.legend { position: absolute; right: 10px; bottom: 10px; z-index: 3; background: color-mix(in srgb, var(--surface) 94%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 11px; display: grid; gap: 2px; max-width: 210px; }
+.legend .li { display: flex; align-items: center; gap: 7px; color: var(--ink-2); }
+.legend svg { flex: none; }
+.legend .scale { display: flex; align-items: center; gap: 6px; color: var(--ink-3); margin-top: 2px; }
+.legend .scale span { white-space: nowrap; }
+.legend .bar { flex: none; }
+.legend .bar { height: 5px; border: 1.5px solid var(--ink-2); border-top: 0; }
+.mapinfo { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: min(310px, calc(100% - 250px)); min-width: 240px; background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; font-size: 12px; box-shadow: var(--shadow); max-height: 62%; overflow: auto; }
+.mapinfo h4 { margin: 0 0 2px; font-size: 14px; font-weight: 600; padding-right: 22px; }
+.mapinfo .x { position: absolute; top: 6px; right: 6px; border: 0; background: none; font-size: 16px; color: var(--ink-3); width: 24px; height: 24px; }
+.mapinfo dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 8px 0; }
+.mapinfo dt { color: var(--ink-3); }
+.mapinfo dd { margin: 0; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.mapinfo p { margin: 6px 0 0; color: var(--ink-2); }
+.maphint { position: absolute; left: 12px; top: 44px; z-index: 2; font-size: 11px; color: var(--ink-3); pointer-events: none; }
+
+/* panel */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); padding: 0 6px; scrollbar-width: thin; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 11px 12px 9px; font-size: 13px; color: var(--ink-3); white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 500; }
+.tabs .ct { font-family: var(--f-mono); font-size: 11px; background: var(--surface-2); border-radius: 999px; padding: 0 6px; color: var(--ink-2); }
+.tabs .sep { width: 1px; background: var(--line); margin: 8px 6px; flex: none; }
+.pane { padding: 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pane h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.pane h3 small { font-weight: 400; color: var(--ink-3); font-size: 12px; margin-left: 6px; }
+.note { margin: 0; color: var(--ink-2); font-size: 13px; text-wrap: pretty; }
+.note.muted, .muted { color: var(--ink-3); }
+.sumrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.empty { padding: 18px; border: 1px dashed var(--line-2); border-radius: 8px; color: var(--ink-2); font-size: 13px; }
+.empty b { color: var(--ink); }
+
+/* tables */
+.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th { text-align: left; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th.r, td.r { text-align: right; }
+td.r { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--surface-2); }
+tr.sel td { background: var(--accent-soft); }
+tr.trow td { border-bottom: 0; padding-bottom: 4px; }
+tr.whyrow td { padding: 0 10px 10px; color: var(--ink-2); font-size: 12px; text-wrap: pretty; }
+tr.click:hover + tr.whyrow td, tr.trow.click:has(+ tr.whyrow:hover) td { background: var(--surface-2); }
+tr.sel + tr.whyrow td { background: var(--accent-soft); }
+td .t { font-weight: 500; }
+td:first-child { min-width: 150px; }
+td .sub { display: block; color: var(--ink-3); font-size: 11.5px; margin-top: 2px; font-weight: 400; }
+td .why { display: block; color: var(--ink-2); font-size: 12px; margin-top: 4px; max-width: 58ch; text-wrap: pretty; }
+td .pm { color: var(--ink-3); font-size: 11px; display: block; white-space: normal; text-align: right; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; border: 1px solid transparent; }
+.pill i { font-style: normal; font-size: 10px; }
+.p-good { background: color-mix(in srgb, var(--good) 15%, var(--surface)); color: var(--good-ink); border-color: color-mix(in srgb, var(--good) 35%, var(--surface)); }
+.p-queue { background: var(--surface); color: var(--good-ink); border-color: color-mix(in srgb, var(--good) 55%, var(--surface)); }
+.p-warn { background: color-mix(in srgb, var(--warn) 20%, var(--surface)); color: var(--warn-ink); border-color: color-mix(in srgb, var(--warn) 50%, var(--surface)); }
+.p-serious { background: color-mix(in srgb, var(--serious) 18%, var(--surface)); color: var(--serious-ink); border-color: color-mix(in srgb, var(--serious) 45%, var(--surface)); }
+.p-crit { background: color-mix(in srgb, var(--crit) 14%, var(--surface)); color: var(--crit-ink); border-color: color-mix(in srgb, var(--crit) 40%, var(--surface)); }
+.p-neutral { background: var(--surface-2); color: var(--ink-2); border-color: var(--line); }
+.p-violet { background: color-mix(in srgb, var(--violet) 16%, var(--surface)); color: var(--ink); border-color: color-mix(in srgb, var(--violet) 45%, var(--surface)); }
+.p-blue { background: var(--accent-soft); color: var(--ink); border-color: color-mix(in srgb, var(--accent) 40%, var(--surface)); }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchips .chip { height: 28px; }
+
+/* charts */
+.chart { border: 1px solid var(--line); border-radius: 8px; padding: 10px 10px 6px; background: var(--surface); min-width: 0; }
+.chart h4 { margin: 0 0 4px; font-size: 12.5px; font-weight: 500; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--ink-3); font-family: var(--f-sans); font-size: 10.5px; }
+.chart .lbl { fill: var(--ink-2); }
+.chart .gl { stroke: var(--line); stroke-width: 1; }
+.chart .gate { stroke: var(--ink-3); stroke-dasharray: 4 3; stroke-width: 1; fill: none; }
+.lg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px; color: var(--ink-2); margin: 4px 0 2px; }
+.lg span { display: inline-flex; align-items: center; gap: 6px; }
+.lg i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.tip { position: fixed; z-index: 90; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 9px; font-size: 12px; box-shadow: var(--shadow); max-width: 260px; }
+.tip b { display: block; font-weight: 600; }
+.tip .mono { color: var(--ink-2); }
+
+/* parameters, data */
+.pgroup { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.pgroup h3 { font-size: 13px; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.param { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.param label { font-size: 12.5px; font-weight: 500; }
+.param .ig { display: flex; align-items: center; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); overflow: hidden; }
+.param .ig:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.param input, .param select { border: 0; background: transparent; padding: 6px 8px; width: 100%; min-width: 0; height: 32px; font-family: var(--f-mono); font-size: 13px; }
+.param input:focus-visible, .param select:focus-visible { outline: none; }
+.param .u { padding: 0 9px; color: var(--ink-3); font-size: 12px; white-space: nowrap; border-left: 1px solid var(--line); height: 32px; display: flex; align-items: center; background: var(--surface-2); }
+.param .h { font-size: 11.5px; color: var(--ink-3); text-wrap: pretty; }
+.param.chg input { color: var(--accent); }
+.drop { border: 1.5px dashed var(--line-2); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop h3 { font-size: 13px; }
+.mapgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; }
+.mapgrid select { height: 30px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--surface); padding: 0 6px; width: 100%; font-size: 12.5px; }
+.mapgrid label { font-size: 11.5px; color: var(--ink-3); display: block; margin-bottom: 2px; }
+.alert { padding: 9px 12px; border-radius: 8px; font-size: 12.5px; border: 1px solid var(--line-2); background: var(--surface-2); }
+.alert.err { border-color: color-mix(in srgb, var(--crit) 50%, var(--surface)); background: color-mix(in srgb, var(--crit) 10%, var(--surface)); }
+.alert.warn { border-color: color-mix(in srgb, var(--warn) 55%, var(--surface)); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.alert.ok { border-color: color-mix(in srgb, var(--good) 45%, var(--surface)); background: color-mix(in srgb, var(--good) 10%, var(--surface)); }
+.alert ul { margin: 4px 0 0; padding-left: 18px; }
+.method h3 { margin-top: 4px; }
+.method p, .method li { font-size: 13px; color: var(--ink-2); max-width: 78ch; text-wrap: pretty; }
+.method ul, .method ol { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.method code, .code { font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+.formula { font-family: var(--f-mono); font-size: 12px; background: var(--surface-2); border-radius: 6px; padding: 8px 10px; color: var(--ink); overflow-x: auto; white-space: pre; }
+.mrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.mrow .meta { min-width: 0; }
+.mrow .meta b { font-weight: 600; }
+.mrow .meta span { display: block; color: var(--ink-3); font-size: 12px; }
+
+/* modal + toast */
+.modal { position: fixed; inset: 0; z-index: 80; background: rgba(8, 12, 22, .5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal[hidden] { display: none; }
+.mcard { background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; padding: 18px; width: min(560px, 100%); max-height: 88vh; overflow: auto; display: flex; flex-direction: column; gap: 12px; box-shadow: var(--shadow); }
+.mcard h2 { margin: 0; font-size: 16px; }
+.mcard .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.radio { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer; }
+.radio input { margin-top: 3px; }
+.radio b { display: block; font-size: 13px; }
+.radio span { font-size: 12px; color: var(--ink-3); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 95; background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 13px; max-width: 90vw; }
+.busy { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; background: rgba(8, 12, 22, .35); color: #fff; font-size: 14px; }
+.busy[hidden], .toast[hidden], .tip[hidden], .mapinfo[hidden] { display: none; }
+.busy div { background: var(--surface); color: var(--ink); padding: 12px 18px; border-radius: 8px; border: 1px solid var(--line-2); }
+
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .mapcard { position: relative; top: 0; height: 520px; min-height: 0; }
+}
+@media (max-width: 560px) {
+  .mapinfo { width: calc(100% - 20px); max-height: 45%; bottom: 10px; }
+  .legend { display: none; }
+  .tile .v { font-size: 20px; }
+  .maphint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+</style></head><body>
+<div class="app" id="app">
+  <header class="top">
+    <div>
+      <h1>Lab Network Planner</h1>
+      <p class="sub">Where to open labs, which labs to make Assured, which to close. Every threshold is editable.</p>
+    </div>
+    <div class="acts">
+      <span class="badge" id="dsBadge">Loading</span>
+      <button class="btn" id="btnData" type="button">Upload data</button>
+      <button class="btn" id="btnModels" type="button">Published analyses</button>
+      <button class="btn primary" id="btnSave" type="button">Export analysis</button>
+    </div>
+  </header>
+
+  <section class="filters" aria-label="Filters">
+    <div class="field"><span class="lab">City</span>
+      <details class="dd" id="ddCity"><summary id="sumCity">All cities</summary><div class="dd-pop" id="popCity"></div></details>
+    </div>
+    <div class="field"><label for="dFrom">Order date from</label><input class="input" type="date" id="dFrom"></div>
+    <div class="field"><label for="dTo">to</label><input class="input" type="date" id="dTo"></div>
+    <div class="field"><span class="lab">PIN code</span>
+      <details class="dd" id="ddPin"><summary id="sumPin">All PIN codes</summary><div class="dd-pop" id="popPin"></div></details>
+    </div>
+    <div class="field"><span class="lab">&nbsp;</span><button class="btn" id="btnReset" type="button">Reset filters</button></div>
+    <div class="field" id="filterNote" style="flex:1 1 220px;align-self:center"></div>
+  </section>
+
+  <p class="headline" id="headline"></p>
+  <section class="kpis" id="kpis" aria-label="Network summary"></section>
+
+  <main class="grid">
+    <section class="mapcard" id="mapcard" aria-label="Map of orders and labs">
+      <canvas id="map"></canvas>
+      <div class="mt tl" id="mapTools"></div>
+      <div class="mt tr">
+        <button class="zbtn" id="zIn" type="button" aria-label="Zoom in">+</button>
+        <button class="zbtn" id="zOut" type="button" aria-label="Zoom out">&minus;</button>
+        <button class="zbtn" id="zFit" type="button" aria-label="Fit to selection" title="Fit to selection">&#x2316;</button>
+      </div>
+      <div class="mapinfo" id="mapInfo" hidden></div>
+      <div class="legend" id="legend"></div>
+    </section>
+    <section class="panel">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="pane" id="pane"></div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden><div class="mcard" id="mcard" role="dialog" aria-modal="true"></div></div>
+<div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="busy" id="busy" hidden><div id="busyMsg">Working</div></div>
+
+<script>
+/* Lab Network Planner: analysis engine. Pure functions, no DOM. */
+(function (root) {
+'use strict';
+
+const R_EARTH = 6371.0088, RAD = Math.PI / 180;
+
+function hav(lat1, lng1, lat2, lng2) {
+  const dLat = (lat2 - lat1) * RAD, dLng = (lng2 - lng1) * RAD;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) * Math.sin(dLng / 2) ** 2;
+  return 2 * R_EARTH * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/* ---------------------------------------------------------------- config */
+const DEFAULTS = {
+  circuity: 1.35, dMax: 8, dataMonths: 6,
+  gridKm: 2, catchKm: 6, minSepKm: 2.5, minViable: 100, minGainKm: 2, maxNewSites: 8, assuredTrackOrders: 300,
+  upBreachMax: 12, upNpsMin: 40, upVolMin: 30, upScoreMin: 45, nearMissTol: 25, assuredCapPct: 60,
+  wTat: 40, wNps: 30, wVol: 15, wDist: 15,
+  zConf: 1.2816, npsRespRate: 20,
+  clBreachMin: 20, clNpsMax: 20, clVolMax: 80, clMaxAddKm: 2.5, clMaxPushedPct: 10, clUtilCap: 100,
+  assuredUplift: 1.8
+};
+
+/* ------------------------------------------------------------------- CSV */
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  let nl = text.indexOf('\n'); if (nl < 0) nl = text.length;
+  const first = text.slice(0, nl);
+  const delim = [',', ';', '\t'].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], field = '', inQ = false;
+  const n = text.length;
+  for (let i = 0; i < n; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); field = ''; if (row.length > 1 || row[0] !== '') rows.push(row); row = []; }
+    else if (c !== '\r') field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); if (row.length > 1 || row[0] !== '') rows.push(row); }
+  const headers = (rows.shift() || []).map(h => h.trim());
+  return { headers, rows };
+}
+function toCSV(headers, rows) {
+  const esc = v => { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return [headers.map(esc).join(',')].concat(rows.map(r => r.map(esc).join(','))).join('\n');
+}
+
+/* ---------------------------------------------------------------- schema */
+const ORDER_SCHEMA = [
+  { key: 'id', label: 'Order ID', required: false, syn: ['orderid', 'id', 'orderno', 'ordernumber', 'orderref'] },
+  { key: 'lat', label: 'Customer latitude', required: true, syn: ['lat', 'latitude', 'customerlat', 'custlat', 'userlat', 'customerlatitude'] },
+  { key: 'lng', label: 'Customer longitude', required: true, syn: ['lng', 'long', 'lon', 'longitude', 'customerlong', 'customerlng', 'custlng', 'customerlongitude'] },
+  { key: 'lab', label: 'Lab ID', required: true, syn: ['labid', 'lab', 'assignedlab', 'fulfilledby', 'labcode', 'assignedlabid'] },
+  { key: 'city', label: 'City', required: false, syn: ['city', 'customercity', 'ordercity'] },
+  { key: 'date', label: 'Order date', required: false, syn: ['orderdate', 'date', 'bookingdate', 'createdat', 'slotdate', 'createddate', 'bookingdt'] },
+  { key: 'pin', label: 'PIN code', required: false, syn: ['pin', 'pincode', 'postalcode', 'zip', 'zipcode', 'customerpin', 'customerpincode'] }
+];
+const LAB_SCHEMA = [
+  { key: 'id', label: 'Lab ID', required: true, syn: ['labid', 'id', 'labcode'] },
+  { key: 'name', label: 'Lab name', required: false, syn: ['labname', 'name'] },
+  { key: 'lat', label: 'Lab latitude', required: true, syn: ['lat', 'latitude', 'lablat', 'lablatitude'] },
+  { key: 'lng', label: 'Lab longitude', required: true, syn: ['lng', 'long', 'lon', 'longitude', 'lablong', 'lablng', 'lablongitude'] },
+  { key: 'city', label: 'City', required: false, syn: ['city', 'labcity'] },
+  { key: 'pin', label: 'PIN code', required: false, syn: ['pin', 'pincode', 'postalcode', 'zip', 'labpin', 'labpincode'] },
+  { key: 'breach', label: 'TAT breach %', required: true, syn: ['tatbreachpct', 'tatbreach', 'tatbreachpercent', 'breach', 'breachpct', 'tatbreachrate', 'tatbreachpercentage'] },
+  { key: 'nps', label: 'NPS', required: true, syn: ['nps', 'npsscore'] },
+  { key: 'status', label: 'Assured / Non-Assured', required: true, syn: ['status', 'labtype', 'assuredstatus', 'type', 'assured', 'labstatus', 'tag'] },
+  { key: 'npsN', label: 'NPS responses (optional)', required: false, syn: ['npsresponses', 'npsn', 'npscount', 'npssample', 'npsresponsecount'] },
+  { key: 'tatN', label: 'Orders behind TAT % (optional)', required: false, syn: ['tatorders', 'tatn', 'tatsample', 'tatcount', 'ordersbehindtat'] },
+  { key: 'cap', label: 'Capacity per month (optional)', required: false, syn: ['capacitypermonth', 'capacity', 'monthlycapacity', 'capacitymonth'] }
+];
+const norm = h => String(h).toLowerCase().replace(/[^a-z0-9]/g, '');
+function detectMapping(headers, schema) {
+  const nh = headers.map(norm), used = new Set(), map = {};
+  for (const f of schema) {
+    let idx = -1;
+    for (const s of f.syn) { const k = nh.findIndex((h, i) => h === s && !used.has(i)); if (k >= 0) { idx = k; break; } }
+    if (idx >= 0) used.add(idx);
+    map[f.key] = idx;
+  }
+  return map;
+}
+function parseDay(s) {
+  if (s == null) return -1; s = String(s).trim(); if (!s) return -1;
+  let y, m, d, mm;
+  if ((mm = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(s))) { y = +mm[1]; m = +mm[2]; d = +mm[3]; }
+  else if ((mm = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(s))) { d = +mm[1]; m = +mm[2]; y = +mm[3]; }
+  else if ((mm = /^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s](\d{2,4})/.exec(s))) {
+    d = +mm[1]; m = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(mm[2].toLowerCase()) + 1; y = +mm[3]; if (y < 100) y += 2000;
+  } else return -1;
+  if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31 && y > 1990)) return -1;
+  return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+}
+function dayToISO(day) { return new Date(day * 86400000).toISOString().slice(0, 10); }
+
+/* ----------------------------------------------------- orders / labs parse */
+function parseOrders(tbl, map) {
+  const rows = tbl.rows, n0 = rows.length;
+  const lat = new Float64Array(n0), lng = new Float64Array(n0), labKey = new Int32Array(n0), city = new Int16Array(n0),
+    pin = new Int32Array(n0), day = new Int32Array(n0).fill(-1), w = new Float32Array(n0).fill(1);
+  const cities = [], cityIdx = new Map(), pins = [], pinIdx = new Map(), labKeyList = [], labKeyIdx = new Map();
+  const warn = []; let n = 0, badCoord = 0, noLab = 0, badDate = 0, anyDate = false;
+  const gi = k => map[k];
+  for (let r = 0; r < n0; r++) {
+    const row = rows[r];
+    const la = parseFloat(row[gi('lat')]), lo = parseFloat(row[gi('lng')]);
+    if (!(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || (la === 0 && lo === 0)) { badCoord++; continue; }
+    const lk = String(row[gi('lab')] == null ? '' : row[gi('lab')]).trim();
+    if (!lk) { noLab++; continue; }
+    let ki = labKeyIdx.get(lk.toLowerCase()); if (ki === undefined) { ki = labKeyList.length; labKeyList.push(lk); labKeyIdx.set(lk.toLowerCase(), ki); }
+    let cn = gi('city') >= 0 ? String(row[gi('city')] || '').trim() : ''; if (!cn) cn = 'Unknown';
+    let ci = cityIdx.get(cn.toLowerCase()); if (ci === undefined) { ci = cities.length; cities.push(cn); cityIdx.set(cn.toLowerCase(), ci); }
+    let pn = gi('pin') >= 0 ? String(row[gi('pin')] || '').trim().replace(/\.0+$/, '') : ''; if (!pn) pn = '(no PIN)';
+    let pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); }
+    if (gi('date') >= 0) { const d = parseDay(row[gi('date')]); if (d < 0) badDate++; else { day[n] = d; anyDate = true; } }
+    lat[n] = la; lng[n] = lo; labKey[n] = ki; city[n] = ci; pin[n] = pi; n++;
+  }
+  if (badCoord) warn.push(badCoord.toLocaleString() + ' order rows skipped: latitude or longitude missing or invalid.');
+  if (noLab) warn.push(noLab.toLocaleString() + ' order rows skipped: lab ID empty.');
+  if (badDate) warn.push(badDate.toLocaleString() + ' order rows have an unreadable date and are excluded when a date range is applied.');
+  if (gi('date') < 0) warn.push('No order date column mapped. Date filter is off and the monthly rate uses "Data covers N months" from Parameters.');
+  const cut = a => a.slice(0, n);
+  return { n, lat: cut(lat), lng: cut(lng), labKey: cut(labKey), city: cut(city), pin: cut(pin), day: cut(day), w: cut(w), cities, pins, labKeyList, hasDate: anyDate, warn, rowsRead: n0 };
+}
+function parseStatus(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  if (!s) return null;
+  if (/^(non|not|un|n$|no|false|0)/.test(s) || s.includes('non')) return 'N';
+  if (s.includes('assured') || /^(a|yes|y|true|1)$/.test(s)) return 'A';
+  return null;
+}
+function parseLabs(tbl, map, cities, pins) {
+  const labs = [], warn = [], seen = new Set(); let skipped = 0, badStatus = 0, pctFrac = 0;
+  const gi = k => map[k], num = (row, k) => { if (gi(k) < 0) return NaN; const x = parseFloat(String(row[gi(k)]).replace('%', '')); return x; };
+  const cityIdx = new Map(cities.map((c, i) => [c.toLowerCase(), i])), pinIdx = new Map(pins.map((p, i) => [p, i]));
+  for (const row of tbl.rows) {
+    const id = String(row[gi('id')] == null ? '' : row[gi('id')]).trim();
+    const la = parseFloat(row[gi('lat')]), lo = parseFloat(row[gi('lng')]);
+    const br = num(row, 'breach'), np = num(row, 'nps'); const st = parseStatus(row[gi('status')]);
+    if (!id || seen.has(id.toLowerCase()) || !(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || !isFinite(br) || !isFinite(np)) { skipped++; continue; }
+    if (!st) { badStatus++; continue; }
+    seen.add(id.toLowerCase());
+    let cn = gi('city') >= 0 ? String(row[gi('city')] || '').trim() : ''; if (!cn) cn = 'Unknown';
+    let ci = cityIdx.get(cn.toLowerCase()); if (ci === undefined) { ci = cities.length; cities.push(cn); cityIdx.set(cn.toLowerCase(), ci); }
+    let pn = gi('pin') >= 0 ? String(row[gi('pin')] || '').trim().replace(/\.0+$/, '') : '';
+    let pi = -1; if (pn) { pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); } }
+    const nN = num(row, 'npsN'), tN = num(row, 'tatN'), cp = num(row, 'cap');
+    labs.push({ id, name: gi('name') >= 0 && row[gi('name')] ? String(row[gi('name')]).trim() : id, lat: la, lng: lo, cityIdx: ci, city: cities[ci], pinIdx: pi, pin: pn || '',
+      status: st, breach: br, nps: np, npsN: isFinite(nN) && nN > 0 ? nN : null, tatN: isFinite(tN) && tN > 0 ? tN : null, cap: isFinite(cp) && cp > 0 ? cp : null });
+  }
+  if (labs.length && labs.every(l => l.breach <= 1)) { labs.forEach(l => l.breach *= 100); pctFrac = 1; warn.push('TAT breach values were all between 0 and 1, so they were read as fractions and multiplied by 100.'); }
+  if (skipped) warn.push(skipped + ' lab rows skipped: missing or duplicate lab ID, bad coordinates, or TAT breach / NPS not numeric.');
+  if (badStatus) warn.push(badStatus + ' lab rows skipped: status not recognised. Use "Assured" or "Non-Assured".');
+  return { labs, warn };
+}
+
+/* -------------------------------------------------------------- assembly */
+function assemble(ord, labs, opts) {
+  const D = {
+    n: ord.n, lat: ord.lat, lng: ord.lng, labKey: ord.labKey, city: ord.city, pin: ord.pin, day: ord.day, w: ord.w,
+    cities: ord.cities.slice(), pins: ord.pins.slice(), labKeyList: ord.labKeyList, hasDate: ord.hasDate, labs, warn: (ord.warn || []).slice(),
+    lab: new Int32Array(ord.n), label: (opts && opts.label) || 'Uploaded data'
+  };
+  return D;
+}
+function finalize(D) {
+  D.labs.forEach(l => { if (l.cityIdx >= D.cities.length) D.cities[l.cityIdx] = l.city; });
+  // pin -> dominant city
+  const cnt = new Map();
+  for (let i = 0; i < D.n; i++) { const k = D.pin[i] * 4096 + D.city[i]; cnt.set(k, (cnt.get(k) || 0) + 1); }
+  const best = new Map();
+  for (const [k, c] of cnt) { const p = Math.floor(k / 4096), ci = k % 4096; const b = best.get(p); if (!b || c > b.c) best.set(p, { ci, c }); }
+  D.pinCity = D.pins.map((_, p) => best.has(p) ? best.get(p).ci : -1);
+  D.labs.forEach(l => { if (l.pinIdx >= 0 && D.pinCity[l.pinIdx] === -1) D.pinCity[l.pinIdx] = l.cityIdx; });
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < D.n; i++) { const d = D.day[i]; if (d >= 0) { if (d < mn) mn = d; if (d > mx) mx = d; } }
+  D.dayMin = isFinite(mn) ? mn : null; D.dayMax = isFinite(mx) ? mx : null;
+  link(D);
+  return D;
+}
+function link(D) {
+  const idMap = new Map(); D.labs.forEach((l, j) => idMap.set(String(l.id).trim().toLowerCase(), j));
+  const map = D.labKeyList.map(k => { const v = idMap.get(String(k).trim().toLowerCase()); return v === undefined ? -1 : v; });
+  let miss = 0; const missKeys = new Set();
+  for (let i = 0; i < D.n; i++) { const j = map[D.labKey[i]]; D.lab[i] = j; if (j < 0) { miss += D.w[i]; if (missKeys.size < 8) missKeys.add(D.labKeyList[D.labKey[i]]); } }
+  D.unmatched = miss; D.unmatchedKeys = [...missKeys];
+  D.warnLink = miss ? [Math.round(miss).toLocaleString() + ' orders reference a lab ID that is not in the lab file and are ignored (e.g. ' + [...missKeys].slice(0, 4).join(', ') + ').'] : [];
+  prep(D);
+}
+function prep(D) {
+  const n = D.n, L = D.labs.length;
+  D.dA = new Float32Array(n); D.nn = new Int16Array(n).fill(-1); D.dN = new Float32Array(n);
+  D.labTotal = new Float64Array(L);
+  if (!L) return;
+  const llat = D.labs.map(l => l.lat), llng = D.labs.map(l => l.lng);
+  for (let i = 0; i < n; i++) {
+    const lj = D.lab[i]; if (lj < 0) continue;
+    const la = D.lat[i], lo = D.lng[i], c = Math.cos(la * RAD);
+    let best = Infinity, bj = -1;
+    for (let j = 0; j < L; j++) { const dy = la - llat[j], dx = (lo - llng[j]) * c, d2 = dx * dx + dy * dy; if (d2 < best) { best = d2; bj = j; } }
+    const dn = hav(la, lo, llat[bj], llng[bj]);
+    const da = lj === bj ? dn : hav(la, lo, llat[lj], llng[lj]);
+    if (da < dn) { D.nn[i] = lj; D.dN[i] = da; } else { D.nn[i] = bj; D.dN[i] = dn; }
+    D.dA[i] = da; D.labTotal[lj] += D.w[i];
+  }
+}
+
+/* ---------------------------------------------------------------- helpers */
+function wquantiles(vals, ws, qs) {
+  const n = vals.length; if (!n) return qs.map(() => NaN);
+  const idx = new Uint32Array(n); for (let i = 0; i < n; i++) idx[i] = i;
+  idx.sort((a, b) => vals[a] - vals[b]);
+  let tot = 0; for (let i = 0; i < n; i++) tot += ws[i];
+  const out = []; let cum = 0, k = 0;
+  for (const q of qs) { const t = q * tot; while (k < n - 1 && cum + ws[idx[k]] < t) { cum += ws[idx[k]]; k++; } out.push(vals[idx[k]]); }
+  return out;
+}
+function wilson(p, n, z) {
+  if (!(n > 0)) return [0, 1];
+  const z2 = z * z, den = 1 + z2 / n, c = p + z2 / (2 * n), r = z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n));
+  return [Math.max(0, (c - r) / den), Math.min(1, (c + r) / den)];
+}
+function npsBounds(nps, n, z) {
+  const se = Math.sqrt(Math.max(0, 1 - (nps / 100) ** 2) / Math.max(n, 1)) * 100;
+  return [Math.max(-100, nps - z * se), Math.min(100, nps + z * se)];
+}
+function pctRanks(vals, higherBetter) {
+  const N = vals.length; if (N <= 1) return vals.map(() => 0.5);
+  return vals.map(v => { let lt = 0, eq = 0; for (const u of vals) { if (u < v) lt++; else if (u === v) eq++; } const r = (lt + (eq - 1) / 2) / (N - 1); return higherBetter ? r : 1 - r; });
+}
+function filterPoints(D, F, withGeo) {
+  const out = []; const useDate = D.hasDate && F.dayFrom != null;
+  for (let i = 0; i < D.n; i++) {
+    if (D.lab[i] < 0) continue;
+    if (useDate) { const d = D.day[i]; if (d < F.dayFrom || d > F.dayTo) continue; }
+    if (withGeo) { if (F.cities && !F.cities.has(D.city[i])) continue; if (F.pins && !F.pins.has(D.pin[i])) continue; }
+    out.push(i);
+  }
+  return Int32Array.from(out);
+}
+function periodMonths(D, F, cfg) {
+  if (!D.hasDate || D.dayMin == null) return cfg.dataMonths;
+  const a = F.dayFrom != null ? Math.max(F.dayFrom, D.dayMin) : D.dayMin, b = F.dayTo != null ? Math.min(F.dayTo, D.dayMax) : D.dayMax;
+  return Math.max(0.25, (b - a + 1) / 30.4375);
+}
+
+/* ---------------------------------------------------------------- analyze */
+function analyze(D, F, cfg) {
+  F = F || {}; cfg = Object.assign({}, DEFAULTS, cfg || {});
+  const circ = cfg.circuity, dMax = cfg.dMax, labs = D.labs, L = labs.length, n = D.n;
+  const dateSel = filterPoints(D, F, false), sel = filterPoints(D, F, true);
+  const months = periodMonths(D, F, cfg);
+  const res = { cfg, months, selIdx: sel, nSel: sel.length, nDate: dateSel.length };
+
+  /* --- lab level stats on every order in the date window (any geography) --- */
+  const ord = new Float64Array(L), sumD = new Float64Array(L), farW = new Float64Array(L), vor = new Float64Array(L);
+  const lv = labs.map(() => []), lw = labs.map(() => []);
+  const members = labs.map(() => []);
+  for (const i of dateSel) {
+    const j = D.lab[i], w = D.w[i], d = D.dA[i] * circ;
+    ord[j] += w; sumD[j] += w * d; if (d > dMax) farW[j] += w; lv[j].push(d); lw[j].push(w); members[j].push(i);
+    vor[D.nn[i]] += w;
+  }
+  const selOrd = new Float64Array(L); let selTotal = 0;
+  for (const i of sel) { selOrd[D.lab[i]] += D.w[i]; selTotal += D.w[i]; }
+
+  const rec = labs.map((l, j) => {
+    const p90 = lv[j].length ? wquantiles(lv[j], lw[j], [0.9])[0] : NaN;
+    const nTat = l.tatN != null ? l.tatN : Math.max(D.labTotal[j], 1);
+    const nNps = l.npsN != null ? l.npsN : Math.max(5, D.labTotal[j] * cfg.npsRespRate / 100);
+    const bw = wilson(l.breach / 100, nTat, cfg.zConf), nb = npsBounds(l.nps, nNps, cfg.zConf);
+    const pm = ord[j] / months;
+    const cityOK = !F.cities || F.cities.has(l.cityIdx), pinOK = !F.pins || (l.pinIdx >= 0 && F.pins.has(l.pinIdx));
+    const inScope = (cityOK && pinOK) || (selTotal > 0 && selOrd[j] >= 0.02 * selTotal);
+    return {
+      idx: j, id: l.id, name: l.name, city: l.city, pin: l.pin, lat: l.lat, lng: l.lng, status: l.status,
+      orders: ord[j], pm, avgDist: ord[j] ? sumD[j] / ord[j] : NaN, p90, farShare: ord[j] ? farW[j] / ord[j] : 0, vorPm: vor[j] / months,
+      breach: l.breach, breachLo: bw[0] * 100, breachHi: bw[1] * 100, nps: l.nps, npsLo: nb[0], npsHi: nb[1], nTat, nNps,
+      cap: l.cap, util: l.cap ? pm / l.cap : null, inScope, selOrders: selOrd[j] / months
+    };
+  });
+
+  /* --- score (percentile blend inside scope) --- */
+  const scope = rec.filter(r => r.inScope);
+  const med = (() => { const v = scope.map(r => r.avgDist).filter(isFinite).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : 0; })();
+  const sB = pctRanks(scope.map(r => r.breach), false), sN = pctRanks(scope.map(r => r.nps), true),
+    sV = pctRanks(scope.map(r => r.pm), true), sD = pctRanks(scope.map(r => isFinite(r.avgDist) ? r.avgDist : med), false);
+  const wsum = (cfg.wTat + cfg.wNps + cfg.wVol + cfg.wDist) || 1;
+  scope.forEach((r, k) => {
+    r.parts = { tat: sB[k], nps: sN[k], vol: sV[k], dist: sD[k] };
+    r.score = 100 * (cfg.wTat * sB[k] + cfg.wNps * sN[k] + cfg.wVol * sV[k] + cfg.wDist * sD[k]) / wsum;
+  });
+  rec.forEach(r => { if (!r.inScope) { r.score = NaN; r.parts = null; } });
+
+  /* --- upgrades --- */
+  const tol = cfg.nearMissTol / 100;
+  const nScope = scope.length, assuredNow = scope.filter(r => r.status === 'A').length;
+  const slots = Math.max(0, Math.floor(cfg.assuredCapPct / 100 * nScope + 1e-9) - assuredNow);
+  const ups = [];
+  for (const r of scope) {
+    if (r.status === 'A') { r.up = { bucket: 'assured', why: 'Already Assured' }; continue; }
+    const g = [
+      { k: 'tat', ok: r.breachHi <= cfg.upBreachMax, gap: (r.breachHi - cfg.upBreachMax) / cfg.upBreachMax, text: 'TAT breach upper bound ' + r.breachHi.toFixed(1) + '% vs max ' + cfg.upBreachMax + '%' },
+      { k: 'nps', ok: r.npsLo >= cfg.upNpsMin, gap: (cfg.upNpsMin - r.npsLo) / Math.max(Math.abs(cfg.upNpsMin), 20), text: 'NPS lower bound ' + r.npsLo.toFixed(0) + ' vs min ' + cfg.upNpsMin },
+      { k: 'vol', ok: r.pm >= cfg.upVolMin, gap: (cfg.upVolMin - r.pm) / cfg.upVolMin, text: r.pm.toFixed(0) + ' orders/month vs min ' + cfg.upVolMin },
+      { k: 'score', ok: r.score >= cfg.upScoreMin, gap: (cfg.upScoreMin - r.score) / cfg.upScoreMin, text: 'Composite score ' + r.score.toFixed(0) + ' vs min ' + cfg.upScoreMin }
+    ];
+    const fails = g.filter(x => !x.ok);
+    r.up = { gates: g, fails };
+    if (!fails.length) { r.up.bucket = 'upgrade'; ups.push(r); }
+    else if (fails.every(f => f.gap <= tol)) { r.up.bucket = 'near'; }
+    else r.up.bucket = 'no';
+  }
+  ups.sort((a, b) => b.score - a.score);
+  ups.forEach((r, k) => {
+    if (k < slots) r.up.why = 'Passes every gate: breach upper bound ' + r.breachHi.toFixed(1) + '% (max ' + cfg.upBreachMax + '%), NPS lower bound ' + r.npsLo.toFixed(0) + ' (min ' + cfg.upNpsMin + '), ' + r.pm.toFixed(0) + ' orders a month (min ' + cfg.upVolMin + '), score ' + r.score.toFixed(0) + ' (min ' + cfg.upScoreMin + ').';
+    else { r.up.bucket = 'queue'; r.up.why = 'Passes all gates, but the Assured cap of ' + cfg.assuredCapPct + '% of labs is reached. Next in line.'; }
+  });
+  for (const r of scope) {
+    if (r.up.bucket === 'near') r.up.why = 'Close to eligible but misses: ' + r.up.fails.map(f => f.text).join('; ') + '.';
+    else if (r.up.bucket === 'no') r.up.why = 'Fails: ' + r.up.fails.map(f => f.text).join('; ') + '.';
+  }
+  res.slots = slots;
+
+  /* --- closures (sequential, so each accepted closure changes the network the next is tested on) --- */
+  const curLab = Int32Array.from(D.lab), curD = new Float32Array(n);
+  for (const i of dateSel) curD[i] = D.dA[i] * circ;
+  res.closeLab = new Int32Array(n).fill(-1); res.closeD = new Float32Array(n);
+  const active = new Set(labs.map((_, j) => j));
+  const load = Float64Array.from(rec.map(r => r.pm));
+  const llat = labs.map(l => l.lat), llng = labs.map(l => l.lng);
+  const closed = [];
+  const cand = [];
+  for (const r of scope) {
+    const lowVol = r.pm < cfg.clVolMax;
+    const badBreach = r.breachLo >= cfg.clBreachMin, badNps = r.npsHi <= cfg.clNpsMax;
+    const flagged = badBreach || badNps;
+    const reasons = [];
+    if (badBreach) reasons.push('TAT breach lower bound ' + r.breachLo.toFixed(1) + '% is at or above ' + cfg.clBreachMin + '%');
+    if (badNps) reasons.push('NPS upper bound ' + r.npsHi.toFixed(0) + ' is at or below ' + cfg.clNpsMax);
+    r.cl = { flagged, lowVol, reasons, bucket: 'keep', why: flagged ? '' : 'Performance is above the closure thresholds.' };
+    if (flagged && !lowVol) { r.cl.bucket = 'fix'; r.cl.why = 'Weak performance (' + reasons.join('; ') + ') but ' + r.pm.toFixed(0) + ' orders/month is too much volume to close. Fix or put on watchlist.'; }
+    if (flagged && lowVol) cand.push(r);
+  }
+  cand.sort((a, b) => a.score - b.score);
+  for (const r of cand) {
+    const c = r.idx, mem = members[c];
+    const moves = new Map(); let sw = 0, sAdd = 0, sPush = 0, noOther = active.size <= 1;
+    const recvW = new Map();
+    for (const i of mem) {
+      const w = D.w[i], la = D.lat[i], lo = D.lng[i], cc = Math.cos(la * RAD);
+      let best = Infinity, bj = -1;
+      for (const j of active) { if (j === c) continue; const dy = la - llat[j], dx = (lo - llng[j]) * cc, d2 = dx * dx + dy * dy; if (d2 < best) { best = d2; bj = j; } }
+      if (bj < 0) { noOther = true; break; }
+      const nd = hav(la, lo, llat[bj], llng[bj]) * circ;
+      moves.set(i, [bj, nd]); sw += w; sAdd += w * (nd - curD[i]);
+      if (nd > dMax && curD[i] <= dMax) sPush += w;
+      recvW.set(bj, (recvW.get(bj) || 0) + w);
+    }
+    const addKm = sw ? sAdd / sw : 0, pushed = sw ? 100 * sPush / sw : 0;
+    let maxUtil = null, capUnknown = false;
+    for (const [j, w] of recvW) { const cap = labs[j].cap; if (cap) { const u = (load[j] + w / months) / cap; if (maxUtil == null || u > maxUtil) maxUtil = u; } else capUnknown = true; }
+    const covOK = !noOther && addKm <= cfg.clMaxAddKm && pushed <= cfg.clMaxPushedPct;
+    const capOK = maxUtil == null || maxUtil <= cfg.clUtilCap / 100;
+    r.cl.tests = { addKm, pushed, maxUtil, capUnknown, covOK, capOK, receivers: [...recvW.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([j, w]) => ({ name: labs[j].name, share: sw ? w / sw : 0 })) };
+    if (covOK && capOK) {
+      r.cl.bucket = 'close';
+      r.cl.why = 'Weak performance (' + reasons2(r) + ') on only ' + r.pm.toFixed(0) + ' orders/month. Its customers move to nearby labs, ' + (addKm >= 0 ? '+' : '') + addKm.toFixed(1) + ' km on average' + (capUnknown && maxUtil == null ? ' (receiving lab capacity not provided, so not tested).' : '.');
+      closed.push(c); active.delete(c);
+      for (const [i, [bj, nd]] of moves) { curLab[i] = bj; curD[i] = nd; members[bj].push(i); res.closeLab[i] = bj; res.closeD[i] = nd; }
+      for (const [j, w] of recvW) load[j] += w / months;
+      load[c] = 0;
+    } else {
+      r.cl.bucket = 'fix';
+      const why = [];
+      if (noOther) why.push('no other lab to take its customers');
+      if (!noOther && addKm > cfg.clMaxAddKm) why.push('customers would travel ' + (addKm >= 0 ? '+' : '') + addKm.toFixed(1) + ' km on average (limit ' + cfg.clMaxAddKm + ')');
+      if (!noOther && pushed > cfg.clMaxPushedPct) why.push(pushed.toFixed(0) + '% of its orders would fall beyond ' + dMax + ' km (limit ' + cfg.clMaxPushedPct + '%)');
+      if (!capOK) why.push('receiving labs would run at ' + (maxUtil * 100).toFixed(0) + '% of capacity (limit ' + cfg.clUtilCap + '%)');
+      r.cl.why = 'Weak and low volume, but closing it fails the coverage or capacity test: ' + why.join('; ') + '. Fix or keep on watchlist.';
+    }
+  }
+  function reasons2(r) { return r.cl.reasons.join('; '); }
+  res.closed = closed; res.upgrades = ups.filter(r => r.up.bucket === 'upgrade').map(r => r.idx);
+
+  /* --- KPIs on the selected customer geography --- */
+  const dA = new Float64Array(sel.length), ws = new Float64Array(sel.length);
+  let tot = 0, sd = 0, within = 0, under = 0, sdn = 0, onAssured = 0;
+  sel.forEach((i, k) => {
+    const w = D.w[i], d = D.dA[i] * circ; dA[k] = d; ws[k] = w; tot += w; sd += w * d; sdn += w * D.dN[i] * circ;
+    if (d <= dMax) within += w; if (D.dN[i] * circ > dMax) under += w; if (labs[D.lab[i]].status === 'A') onAssured += w;
+  });
+  const q = wquantiles(dA, ws, [0.5, 0.9]);
+  res.kpi = {
+    orders: tot, pm: tot / months, acd: tot ? sd / tot : NaN, p50: q[0], p90: q[1], within: tot ? 100 * within / tot : NaN,
+    nearestAcd: tot ? sdn / tot : NaN, underserved: tot ? 100 * under / tot : NaN, underOrders: under,
+    labs: scope.length, assured: assuredNow, onAssured: tot ? 100 * onAssured / tot : NaN
+  };
+  res.labs = rec; res.scope = scope;
+  res.counts = {
+    upgrade: scope.filter(r => r.up.bucket === 'upgrade').length, queue: scope.filter(r => r.up.bucket === 'queue').length,
+    near: scope.filter(r => r.up.bucket === 'near').length, no: scope.filter(r => r.up.bucket === 'no').length,
+    close: scope.filter(r => r.cl.bucket === 'close').length, fix: scope.filter(r => r.cl.bucket === 'fix').length
+  };
+
+  planSites(D, sel, months, cfg, res);
+  pinTable(D, sel, months, cfg, res);
+  res.hist = histogram(D, sel, cfg, null);
+  return res;
+}
+
+/* ------------------------------------------------------------ new lab siting */
+function planSites(D, sel, months, cfg, res) {
+  const circ = cfg.circuity, dMax = cfg.dMax, labs = D.labs, grid = cfg.gridKm, catchKm = cfg.catchKm;
+  const groups = new Map(); let underW = 0;
+  for (const i of sel) if (D.dN[i] * circ > dMax) { const c = D.city[i]; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); underW += D.w[i]; }
+  res.siteMoveD = new Float32Array(D.n).fill(Infinity); res.siteMoveId = new Int16Array(D.n).fill(-1);
+  const sites = []; let capturedW = 0;
+  const rad = catchKm / circ, win = Math.ceil(rad / grid) + 1;
+  for (const [cityIdx, pts] of groups) {
+    const m = pts.length; let lat0 = 0, lng0 = 0; for (const i of pts) { lat0 += D.lat[i]; lng0 += D.lng[i]; } lat0 /= m; lng0 /= m;
+    const kx = 111.195 * Math.cos(lat0 * RAD), ky = 111.195;
+    const px = new Float64Array(m), py = new Float64Array(m), pw = new Float64Array(m), d0 = new Float64Array(m), da = new Float64Array(m), alive = new Uint8Array(m).fill(1);
+    pts.forEach((i, k) => { px[k] = (D.lng[i] - lng0) * kx; py[k] = (D.lat[i] - lat0) * ky; pw[k] = D.w[i]; d0[k] = D.dN[i] * circ; da[k] = D.dA[i] * circ; });
+    const ex = labs.map(l => ({ x: (l.lng - lng0) * kx, y: (l.lat - lat0) * ky, a: l.status === 'A', name: l.name }));
+    const cells = new Map(); const key = (cx, cy) => cx * 100003 + cy;
+    for (let k = 0; k < m; k++) { const cx = Math.floor(px[k] / grid), cy = Math.floor(py[k] / grid), kk = key(cx, cy); let a = cells.get(kk); if (!a) { a = []; cells.set(kk, a); } a.push(k); }
+    const chosen = [];
+    const evalAt = (x, y) => {
+      const cx = Math.floor(x / grid), cy = Math.floor(y / grid); let sw = 0, gain = 0; const list = [];
+      for (let ax = cx - win; ax <= cx + win; ax++) for (let ay = cy - win; ay <= cy + win; ay++) {
+        const a = cells.get(key(ax, ay)); if (!a) continue;
+        for (const k of a) { if (!alive[k]) continue; const d = Math.hypot(px[k] - x, py[k] - y) * circ; if (d <= catchKm && d < d0[k]) { sw += pw[k]; gain += pw[k] * (d0[k] - d); list.push(k); } }
+      }
+      return { sw, gain, list };
+    };
+    const okAt = (x, y, e) => {
+      if (!e.sw || e.sw / months < cfg.minViable || e.gain / e.sw < cfg.minGainKm) return false;
+      for (const l of ex) if (Math.hypot(l.x - x, l.y - y) * circ < cfg.minSepKm) return false;
+      for (const s of chosen) if (Math.hypot(s.x - x, s.y - y) * circ < cfg.minSepKm) return false;
+      return true;
+    };
+    for (let it = 0; it < cfg.maxNewSites; it++) {
+      const cc = new Map();
+      for (let k = 0; k < m; k++) if (alive[k]) { const kk = key(Math.floor(px[k] / grid), Math.floor(py[k] / grid)); let a = cc.get(kk); if (!a) { a = { sw: 0, sx: 0, sy: 0 }; cc.set(kk, a); } a.sw += pw[k]; a.sx += pw[k] * px[k]; a.sy += pw[k] * py[k]; }
+      let best = null;
+      for (const a of cc.values()) {
+        const x = a.sx / a.sw, y = a.sy / a.sw, e = evalAt(x, y);
+        if (okAt(x, y, e) && (!best || e.gain > best.e.gain)) best = { x, y, e };
+      }
+      if (!best) break;
+      for (let r = 0; r < 4; r++) { // pull the site to the centroid of the customers it captures
+        let sx = 0, sy = 0, sw = 0; for (const k of best.e.list) { sx += pw[k] * px[k]; sy += pw[k] * py[k]; sw += pw[k]; }
+        const x = sx / sw, y = sy / sw, e = evalAt(x, y);
+        if (okAt(x, y, e) && e.gain >= best.e.gain) best = { x, y, e }; else break;
+      }
+      const { x, y, e } = best; let sb = 0, sa = 0, inside = 0; const pinW = new Map();
+      for (const k of e.list) { alive[k] = 0; const d = Math.hypot(px[k] - x, py[k] - y) * circ; sb += pw[k] * da[k]; sa += pw[k] * d; if (d <= dMax) inside += pw[k]; const pi = D.pin[pts[k]]; pinW.set(pi, (pinW.get(pi) || 0) + pw[k]); }
+      let nl = Infinity, nlName = '', na = Infinity, naName = '';
+      for (const l of ex) { const d = Math.hypot(l.x - x, l.y - y) * circ; if (d < nl) { nl = d; nlName = l.name; } if (l.a && d < na) { na = d; naName = l.name; } }
+      const pinTop = [...pinW.entries()].sort((a, b) => b[1] - a[1])[0];
+      const pm = e.sw / months;
+      const noAssured = na > catchKm, hiDemand = pm >= cfg.assuredTrackOrders;
+      const type = noAssured || hiDemand ? 'Assured-track' : 'Non-Assured (probation)';
+      const site = {
+        id: sites.length + 1, cityIdx, city: D.cities[cityIdx], x, y, lat: lat0 + y / ky, lng: lng0 + x / kx, orders: e.sw, pm,
+        before: sb / e.sw, after: sa / e.sw, gainPct: 100 * (sb - sa) / sb, withinAfter: 100 * inside / e.sw,
+        nearestLab: nl, nearestLabName: nlName, nearestAssured: isFinite(na) ? na : null, nearestAssuredName: naName,
+        pin: D.pins[pinTop[0]], type, gainKm: e.gain / e.sw,
+        why: (noAssured ? 'No Assured lab within ' + catchKm + ' km' : 'Assured lab ' + na.toFixed(1) + ' km away') + (hiDemand ? '; demand of ' + pm.toFixed(0) + ' orders/month is at or above ' + cfg.assuredTrackOrders : '') + '.'
+      };
+      const sid = sites.length; site.pts = e.list.map(k => pts[k]);
+      for (const k of e.list) { const i = pts[k]; res.siteMoveD[i] = Math.hypot(px[k] - x, py[k] - y) * circ; res.siteMoveId[i] = sid; }
+      chosen.push({ x, y }); sites.push(site); capturedW += e.sw;
+    }
+  }
+  sites.sort((a, b) => b.orders * b.gainKm - a.orders * a.gainKm); sites.forEach((s, k) => { s.rank = k + 1; });
+  res.sites = sites; res.siteUnservedOrders = underW - capturedW; res.siteUnderserved = underW;
+}
+
+/* ---------------------------------------------------------------- PIN gaps */
+function pinTable(D, sel, months, cfg, res) {
+  const circ = cfg.circuity, dMax = cfg.dMax, g = new Map();
+  for (const i of sel) {
+    const p = D.pin[i]; let a = g.get(p); if (!a) { a = { pin: D.pins[p], pinIdx: p, city: D.cities[D.pinCity[p]] || '', w: 0, sda: 0, sdn: 0, far: 0, under: 0, lat: 0, lng: 0 }; g.set(p, a); }
+    const w = D.w[i], da = D.dA[i] * circ, dn = D.dN[i] * circ; a.w += w; a.sda += w * da; a.sdn += w * dn; if (da > dMax) a.far += w; if (dn > dMax) a.under += w; a.lat += w * D.lat[i]; a.lng += w * D.lng[i];
+  }
+  const siteByPin = new Map(res.sites.map(s => [s.pin, s.id]));
+  res.pins = [...g.values()].map(a => ({ pin: a.pin, pinIdx: a.pinIdx, city: a.city, orders: a.w, pm: a.w / months, avgDist: a.sda / a.w, nearestAvg: a.sdn / a.w, farPct: 100 * a.far / a.w, underPct: 100 * a.under / a.w, underOrders: a.under, lat: a.lat / a.w, lng: a.lng / a.w, site: siteByPin.get(a.pin) || null }))
+    .sort((a, b) => b.underOrders - a.underOrders || b.orders - a.orders);
+}
+
+/* ---------------------------------------------------------------- histogram */
+function histogram(D, sel, cfg, dists) {
+  const edges = [0, 2, 4, 6, 8, 10, 12, 15, Infinity], h = new Float64Array(edges.length - 1);
+  let tot = 0;
+  sel.forEach((i, k) => { const d = dists ? dists[k] : D.dA[i] * cfg.circuity, w = D.w[i]; tot += w; for (let b = 0; b < h.length; b++) if (d < edges[b + 1]) { h[b] += w; break; } });
+  return { edges, share: Array.from(h, v => tot ? 100 * v / tot : 0), total: tot };
+}
+
+/* --------------------------------------------------------------- simulator */
+function simulate(D, res, opts) {
+  const cfg = res.cfg, circ = cfg.circuity, labs = D.labs, sel = res.selIdx, n = sel.length;
+  const before = new Float64Array(n), after = new Float64Array(n), ws = new Float64Array(n);
+  const upSet = new Set(opts.upgrades ? res.upgrades : []);
+  let totW = 0, aBefore = 0, aAfter = 0, uW = 0, closedMoved = 0, siteMoved = 0;
+  for (let k = 0; k < n; k++) {
+    const i = sel[k], w = D.w[i]; ws[k] = w; totW += w;
+    const b = D.dA[i] * circ; before[k] = b; let a = b, labAfter = D.lab[i], newSite = false;
+    if (opts.closures && res.closeLab[i] >= 0) { a = res.closeD[i]; labAfter = res.closeLab[i]; closedMoved += w; }
+    if (opts.sites && res.siteMoveD[i] < a) { a = res.siteMoveD[i]; labAfter = -2; newSite = true; siteMoved += w; }
+    after[k] = a;
+    if (labs[D.lab[i]].status === 'A') aBefore += w;
+    if (!newSite && labAfter >= 0) { if (labs[labAfter].status === 'A') aAfter += w; else if (upSet.has(labAfter)) uW += w; }
+  }
+  const stat = (arr) => {
+    let s = 0, inside = 0; for (let k = 0; k < n; k++) { s += ws[k] * arr[k]; if (arr[k] <= cfg.dMax) inside += ws[k]; }
+    const q = wquantiles(arr, ws, [0.5, 0.9]); return { acd: totW ? s / totW : NaN, p50: q[0], p90: q[1], within: totW ? 100 * inside / totW : NaN };
+  };
+  const rest = totW - aAfter - uW, extra = Math.min(uW * (cfg.assuredUplift - 1), Math.max(0, rest));
+  const aAfterTot = aAfter + uW + (opts.upgrades ? extra : 0);
+  const nLabs = res.scope.length, nA = res.kpi.assured;
+  const closeN = opts.closures ? res.counts.close : 0, siteN = opts.sites ? res.sites.length : 0, upN = opts.upgrades ? res.counts.upgrade : 0;
+  return {
+    before: Object.assign(stat(before), { labs: nLabs, assured: nA, assuredShare: totW ? 100 * aBefore / totW : NaN, assuredLabPct: nLabs ? 100 * nA / nLabs : NaN }),
+    after: Object.assign(stat(after), { labs: nLabs - closeN + siteN, assured: nA + upN - (opts.closures ? res.scope.filter(r => r.status === 'A' && r.cl.bucket === 'close').length : 0),
+      assuredShare: totW ? 100 * aAfterTot / totW : NaN }),
+    moved: { closures: closedMoved, sites: siteMoved }, histBefore: histogram(D, sel, cfg, before), histAfter: histogram(D, sel, cfg, after)
+  };
+}
+
+const API = { DEFAULTS, hav, parseCSV, toCSV, ORDER_SCHEMA, LAB_SCHEMA, detectMapping, parseOrders, parseLabs, assemble, finalize, link, parseDay, dayToISO, analyze, simulate, filterPoints, wilson, npsBounds, wquantiles, periodMonths };
+if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Engine = API;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Dummy Delhi NCR data: customers cluster around real neighbourhoods, labs are placed by hand to tell a few stories. */
+(function (root) {
+'use strict';
+function rng(seed) { let a = seed >>> 0; return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// name, city, pin, lat, lng, weight, spread km
+const CLUSTERS = [
+  ['Connaught Place', 'Delhi', '110001', 28.6315, 77.2167, 6, 1.6], ['Karol Bagh', 'Delhi', '110005', 28.6519, 77.1905, 6, 1.5],
+  ['Rohini', 'Delhi', '110085', 28.7383, 77.0822, 7, 2.2], ['Pitampura', 'Delhi', '110034', 28.6989, 77.1318, 6, 1.6],
+  ['Dwarka', 'Delhi', '110078', 28.5560, 77.0480, 7, 2.0], ['Janakpuri', 'Delhi', '110058', 28.6219, 77.0878, 5, 1.5],
+  ['Uttam Nagar', 'Delhi', '110059', 28.6200, 77.0550, 4, 1.4], ['Saket', 'Delhi', '110017', 28.5245, 77.2066, 5, 1.5],
+  ['Lajpat Nagar', 'Delhi', '110024', 28.5677, 77.2433, 5, 1.4], ['Nehru Place', 'Delhi', '110019', 28.5491, 77.2530, 4, 1.3],
+  ['Laxmi Nagar', 'Delhi', '110092', 28.6304, 77.2773, 6, 1.5], ['Mayur Vihar', 'Delhi', '110091', 28.6086, 77.2955, 5, 1.5],
+  ['Vasant Kunj', 'Delhi', '110070', 28.5200, 77.1590, 3, 1.5], ['Model Town', 'Delhi', '110009', 28.7150, 77.1930, 3, 1.4],
+  ['Gurgaon Sector 14', 'Gurgaon', '122001', 28.4595, 77.0266, 5, 1.6], ['DLF Phase 2', 'Gurgaon', '122002', 28.4750, 77.0950, 5, 1.6],
+  ['Sohna Road', 'Gurgaon', '122018', 28.3900, 77.0500, 6, 2.0], ['Sector 56', 'Gurgaon', '122011', 28.4240, 77.1060, 4, 1.5],
+  ['Noida Sector 18', 'Noida', '201301', 28.5700, 77.3210, 6, 1.6], ['Noida Sector 62', 'Noida', '201309', 28.6270, 77.3650, 5, 1.5],
+  ['Noida Sector 137', 'Noida', '201305', 28.5090, 77.3900, 4, 1.6], ['Greater Noida', 'Noida', '201310', 28.4744, 77.5040, 5, 2.2],
+  ['Indirapuram', 'Ghaziabad', '201014', 28.6480, 77.3640, 5, 1.4], ['Vaishali', 'Ghaziabad', '201010', 28.6450, 77.3400, 4, 1.3],
+  ['Raj Nagar Extension', 'Ghaziabad', '201017', 28.6930, 77.4400, 4, 1.8], ['Faridabad Sector 15', 'Faridabad', '121007', 28.4150, 77.3150, 4, 1.5],
+  ['Faridabad NIT', 'Faridabad', '121001', 28.3880, 77.3120, 3, 1.4], ['Ballabhgarh', 'Faridabad', '121004', 28.3380, 77.3200, 2, 1.4]
+];
+// id, name, city, pin, lat, lng, status, breach %, nps, capacity factor
+const LABS = [
+  ['L01', 'Diag Central CP', 'Delhi', '110001', 28.6330, 77.2200, 'Assured', 5.1, 66, 0.95], ['L02', 'MedScan Karol Bagh', 'Delhi', '110005', 28.6500, 77.1880, 'Assured', 6.4, 61, 1.6],
+  ['L03', 'Rohini Imaging Hub', 'Delhi', '110085', 28.7200, 77.1050, 'Non-Assured', 9.2, 54, 2.2], ['L04', 'Rohini Sector 7 X-Ray', 'Delhi', '110085', 28.7480, 77.0700, 'Non-Assured', 24, 12, 2.0],
+  ['L05', 'Pitampura Radiology', 'Delhi', '110034', 28.7010, 77.1350, 'Assured', 7.4, 58, 1.5], ['L06', 'Model Town Scan', 'Delhi', '110009', 28.7130, 77.1950, 'Non-Assured', 15, 33, 2.0],
+  ['L07', 'Janakpuri Imaging', 'Delhi', '110058', 28.6240, 77.0900, 'Assured', 8.0, 57, 1.6], ['L08', 'Uttam Nagar X-Ray', 'Delhi', '110059', 28.6190, 77.0560, 'Non-Assured', 29, 8, 2.4],
+  ['L09', 'Saket Diagnostics', 'Delhi', '110017', 28.5250, 77.2090, 'Assured', 6.0, 63, 1.5], ['L10', 'Lajpat Scan Point', 'Delhi', '110024', 28.5700, 77.2400, 'Non-Assured', 27, 10, 2.5],
+  ['L11', 'Nehru Place Diagnostics', 'Delhi', '110019', 28.5480, 77.2520, 'Assured', 5.8, 64, 1.8], ['L12', 'Laxmi Nagar Imaging', 'Delhi', '110092', 28.6310, 77.2780, 'Non-Assured', 8.6, 51, 2.0],
+  ['L13', 'Mayur Vihar Scan', 'Delhi', '110091', 28.6100, 77.2950, 'Non-Assured', 13, 38, 2.0], ['L14', 'Vasant Kunj Radiology', 'Delhi', '110070', 28.5200, 77.1600, 'Non-Assured', 11, 46, 2.4],
+  ['L15', 'CP X-Ray Hub', 'Delhi', '110001', 28.6300, 77.2140, 'Non-Assured', 18, 30, 2.2],
+  ['L16', 'Gurgaon Sector 14 Imaging', 'Gurgaon', '122001', 28.4600, 77.0290, 'Assured', 6.9, 60, 1.6], ['L17', 'DLF Scan Centre', 'Gurgaon', '122002', 28.4760, 77.0970, 'Assured', 5.5, 67, 1.7],
+  ['L18', 'Sector 56 X-Ray', 'Gurgaon', '122011', 28.4250, 77.1050, 'Non-Assured', 10.5, 50, 2.0],
+  ['L19', 'Noida Sector 18 Imaging', 'Noida', '201301', 28.5710, 77.3240, 'Assured', 6.2, 62, 1.6], ['L20', 'Noida Sector 62 Scan', 'Noida', '201309', 28.6250, 77.3680, 'Non-Assured', 12, 41, 2.0],
+  ['L21', 'Noida Sector 137 Diagnostics', 'Noida', '201305', 28.5110, 77.3880, 'Non-Assured', 17, 28, 2.2],
+  ['L22', 'Indirapuram Imaging', 'Ghaziabad', '201014', 28.6470, 77.3660, 'Assured', 7.1, 59, 1.5], ['L23', 'Vaishali Scan', 'Ghaziabad', '201010', 28.6440, 77.3390, 'Non-Assured', 23, 15, 2.6],
+  ['L24', 'Raj Nagar Radiology', 'Ghaziabad', '201017', 28.6900, 77.4380, 'Non-Assured', 26, 14, 2.4],
+  ['L25', 'Faridabad Sector 15 Imaging', 'Faridabad', '121007', 28.4170, 77.3170, 'Non-Assured', 14, 36, 2.0], ['L26', 'NIT Scan Centre', 'Faridabad', '121001', 28.3900, 77.3100, 'Non-Assured', 9, 52, 2.2],
+  ['L27', 'Ballabhgarh X-Ray', 'Faridabad', '121004', 28.3400, 77.3190, 'Non-Assured', 23, 17, 2.6]
+];
+
+function generate(seed, months) {
+  const rand = rng(seed || 2026);
+  const gauss = () => { let u = 0, v = 0; while (!u) u = rand(); v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const R = 6371.0088, RAD = Math.PI / 180;
+  const hav = (a, b, c, d) => { const x = (c - a) * RAD, y = (d - b) * RAD, h = Math.sin(x / 2) ** 2 + Math.cos(a * RAD) * Math.cos(c * RAD) * Math.sin(y / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+  const start = Date.UTC(2026, 3, 1) / 86400000, days = 183;
+  // day weights: weekday pattern and gentle growth
+  const dw = []; let tot = 0; for (let d = 0; d < days; d++) { const dt = new Date((start + d) * 86400000); const wd = dt.getUTCDay(); const w = (wd === 0 ? 0.55 : wd === 1 ? 1.25 : wd === 6 ? 0.85 : 1) * (1 + 0.28 * d / days); dw.push(w); tot += w; }
+  const cdf = []; let acc = 0; for (const w of dw) { acc += w / tot; cdf.push(acc); }
+  const pickDay = () => { const u = rand(); let lo = 0, hi = days - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (cdf[m] < u) lo = m + 1; else hi = m; } return start + lo; };
+  const orders = []; let seq = 100001;
+  const per = 200;
+  for (const c of CLUSTERS) {
+    const [, city, pin, lat, lng, wgt, sd] = c, n = Math.round(wgt * per * (0.92 + rand() * 0.16));
+    for (let k = 0; k < n; k++) {
+      const la = lat + gauss() * sd / 111.195, lo = lng + gauss() * sd / (111.195 * Math.cos(lat * RAD));
+      // lab choice: nearer is likelier, Assured labs get the ordering page's preference
+      const opts = LABS.map((l, j) => { const d = hav(la, lo, l[4], l[5]) * 1.35; return { j, d, w: d > 16 ? 0 : Math.exp(-d / 3.4) * (l[6] === 'Assured' ? 2.2 : Math.max(0.2, 1 - l[7] / 40)) }; });
+      let sw = 0; for (const o of opts) sw += o.w;
+      let j;
+      if (sw <= 0) { j = opts.reduce((a, b) => b.d < a.d ? b : a).j; }
+      else { let u = rand() * sw; j = opts[0].j; for (const o of opts) { u -= o.w; if (u <= 0) { j = o.j; break; } } }
+      const day = pickDay();
+      orders.push([la, lo, LABS[j][0], city, pin, day]);
+    }
+  }
+  // shuffle for realism
+  for (let i = orders.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [orders[i], orders[j]] = [orders[j], orders[i]]; }
+  const volume = {}; for (const o of orders) volume[o[2]] = (volume[o[2]] || 0) + 1;
+  const m = months || 6;
+  const labRows = LABS.map(l => {
+    const pm = (volume[l[0]] || 0) / m, cap = Math.max(120, Math.round(pm * l[9] / 10) * 10), hist = Math.round((volume[l[0]] || 0) * 2.4);
+    return [l[1], l[0], l[4], l[5], l[2], l[3], l[7], l[8], l[6], Math.max(8, Math.round((volume[l[0]] || 0) * 0.22)), hist, cap];
+  });
+  const iso = d => new Date(d * 86400000).toISOString().slice(0, 10);
+  return {
+    orders: { headers: ['order_id', 'lat', 'long', 'lab_id', 'city', 'order_date', 'pin_code'], rows: orders.map(o => ['RAD' + (seq++), o[0].toFixed(5), o[1].toFixed(5), o[2], o[3], iso(o[5]), o[4]]) },
+    labs: { headers: ['lab_name', 'lab_id', 'lat', 'long', 'city', 'pin_code', 'tat_breach_pct', 'nps', 'status', 'nps_responses', 'tat_orders', 'capacity_per_month'], rows: labRows }
+  };
+}
+const API = { generate };
+if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Dummy = API;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+(function () {
+'use strict';
+/* ---------- app core: state, helpers, filters, summary ---------- */
+const E = window.Engine, Dm = window.Dummy;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf = (v, d = 0) => isFinite(v) ? Number(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }) : '-';
+const num1 = v => nf(v, 1);
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+
+const S = {
+  D: null, cfg: Object.assign({}, E.DEFAULTS), F: { cities: null, pins: null, dayFrom: null, dayTo: null }, res: null,
+  tab: 'sites', mode: 'status', layers: { orders: true, gaps: true, labs: true, catch: true, pins: true }, sel: null,
+  sim: { upgrades: true, closures: true, sites: true }, upFilter: { upgrade: true, queue: true, near: true, no: false }, clFilter: { close: true, fix: true, keep: false },
+  db: null, user: null, dl: null, uid: null, canWrite: null, models: [], modelNames: {}, up: { orders: null, labs: null }, upMsg: null, cityOrders: [], pinOrders: null, pinQuery: ''
+};
+try { const raw = lsGet('lnp.cfg.v1'); if (raw) Object.assign(S.cfg, JSON.parse(raw)); } catch (e) { }
+const saveCfg = () => lsSet('lnp.cfg.v1', JSON.stringify(S.cfg));
+
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms || 3200); }
+function busy(msg) { $('busyMsg').textContent = msg || 'Working'; $('busy').hidden = !msg; }
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+async function saveFile(filename, text) {
+  if (!S.dl) {
+    try {
+      const mime = /\.json$/i.test(filename) ? 'application/json' : 'text/csv';
+      const url = URL.createObjectURL(new Blob([text], { type: mime + ';charset=utf-8' }));
+      const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000); toast('Downloaded ' + filename);
+    } catch (e) { toast('Could not download the file here.'); }
+    return;
+  }
+  try { await S.dl.save({ filename, data: text }); toast('Saved ' + filename); }
+  catch (e) { if (e && e.code === 'declined') return; toast('Could not save the file here (' + (e && e.code || 'error') + ').'); }
+}
+
+/* ---------- recompute ---------- */
+let rt = null;
+function schedule(ms) { clearTimeout(rt); rt = setTimeout(recompute, ms == null ? 160 : ms); }
+function recompute() {
+  if (!S.D) return;
+  S.res = E.analyze(S.D, S.F, S.cfg);
+  S.sim.cache = null;
+  if (S.sel && ((S.sel.type === 'lab' && !S.res.labs[S.sel.idx]) || (S.sel.type === 'site' && !S.res.sites[S.sel.idx]))) S.sel = null;
+  renderAll();
+  if (S.refit) { S.refit = false; MapView.fit(); }
+}
+function renderAll() {
+  renderFilterNote(); renderKPIs(); renderTabs(); renderPane(); MapView.setData(); renderMapTools(); renderLegend(); renderMapInfo();
+}
+
+/* ---------- dataset load ---------- */
+function setDataset(D, opts) {
+  S.D = D; opts = opts || {};
+  S.sel = null; S.F = { cities: null, pins: null, dayFrom: D.hasDate ? D.dayMin : null, dayTo: D.hasDate ? D.dayMax : null };
+  S.cityOrders = new Float64Array(D.cities.length); S.pinOrders = new Float64Array(D.pins.length);
+  for (let i = 0; i < D.n; i++) { if (D.lab[i] < 0) continue; S.cityOrders[D.city[i]] += D.w[i]; S.pinOrders[D.pin[i]] += D.w[i]; }
+  let tot = 0; for (let i = 0; i < D.n; i++) if (D.lab[i] >= 0) tot += D.w[i];
+  D.totalOrders = tot;
+  const b = $('dsBadge'); b.textContent = D.label + ' · ' + nf(tot) + ' orders · ' + D.labs.length + ' labs'; b.className = 'badge' + (D.sample ? ' sample' : '');
+  buildFilters();
+  recompute();
+}
+
+/* ---------- filters ---------- */
+function buildFilters() {
+  const D = S.D;
+  const dF = $('dFrom'), dT = $('dTo');
+  dF.disabled = dT.disabled = !D.hasDate;
+  if (D.hasDate) { dF.min = dT.min = E.dayToISO(D.dayMin); dF.max = dT.max = E.dayToISO(D.dayMax); dF.value = E.dayToISO(S.F.dayFrom); dT.value = E.dayToISO(S.F.dayTo); }
+  else { dF.value = dT.value = ''; }
+  renderCityPop(); renderPinPop(); updateSummaries();
+}
+function renderCityPop() {
+  const D = S.D, sel = S.F.cities;
+  const idx = D.cities.map((c, i) => i).filter(i => S.cityOrders[i] > 0 || D.labs.some(l => l.cityIdx === i)).sort((a, b) => S.cityOrders[b] - S.cityOrders[a]);
+  $('popCity').innerHTML = idx.map(i => `<label class="row"><input type="checkbox" data-city="${i}" ${sel && sel.has(i) ? 'checked' : ''}> ${esc(D.cities[i])}<span class="n">${nf(S.cityOrders[i])}</span></label>`).join('') +
+    '<div class="foot"><button class="linkbtn" type="button" data-act="cityClear">Clear (all cities)</button></div>';
+}
+function renderPinPop() {
+  const D = S.D, q = S.pinQuery.trim().toLowerCase(), selP = S.F.pins, selC = S.F.cities;
+  let idx = [];
+  for (let p = 0; p < D.pins.length; p++) { if (S.pinOrders[p] <= 0) continue; if (selC && !selC.has(D.pinCity[p])) continue; if (q && !D.pins[p].toLowerCase().includes(q)) continue; idx.push(p); }
+  idx.sort((a, b) => (selP && selP.has(b) ? 1e12 : 0) + S.pinOrders[b] - ((selP && selP.has(a) ? 1e12 : 0) + S.pinOrders[a]));
+  const more = idx.length - 150; idx = idx.slice(0, 150);
+  const el = $('popPin'); const keep = document.activeElement && document.activeElement.id === 'pinQ';
+  el.innerHTML = `<input class="input q" id="pinQ" type="search" placeholder="Search PIN code" value="${esc(S.pinQuery)}" autocomplete="off">` +
+    (idx.length ? idx.map(p => `<label class="row"><input type="checkbox" data-pin="${p}" ${selP && selP.has(p) ? 'checked' : ''}> <span class="mono">${esc(D.pins[p])}</span><span class="n">${nf(S.pinOrders[p])}</span></label>`).join('') : '<div class="note muted" style="padding:6px">No PIN codes match.</div>') +
+    (more > 0 ? `<div class="note muted" style="padding:4px">${more} more. Type to search.</div>` : '') +
+    '<div class="foot"><button class="linkbtn" type="button" data-act="pinClear">Clear (all PINs)</button></div>';
+  if (keep) { const q2 = $('pinQ'); q2.focus(); q2.setSelectionRange(q2.value.length, q2.value.length); }
+}
+function updateSummaries() {
+  const D = S.D, c = S.F.cities, p = S.F.pins;
+  $('sumCity').textContent = !c ? 'All cities' : c.size === 1 ? D.cities[[...c][0]] : c.size + ' cities';
+  $('sumPin').textContent = !p ? 'All PIN codes' : p.size === 1 ? D.pins[[...p][0]] : p.size + ' PIN codes';
+}
+function onFilterChange() { updateSummaries(); S.sel = null; S.refit = true; schedule(60); }
+function wireFilters() {
+  $('popCity').addEventListener('change', e => {
+    const t = e.target; if (!t.dataset.city) return;
+    const s = new Set(S.F.cities || []); const i = +t.dataset.city; t.checked ? s.add(i) : s.delete(i);
+    S.F.cities = s.size ? s : null;
+    if (S.F.pins && S.F.cities) { const keep = new Set([...S.F.pins].filter(p => S.F.cities.has(S.D.pinCity[p]))); S.F.pins = keep.size ? keep : null; }
+    renderPinPop(); onFilterChange();
+  });
+  $('popPin').addEventListener('change', e => {
+    const t = e.target; if (!t.dataset.pin) return;
+    const s = new Set(S.F.pins || []); const i = +t.dataset.pin; t.checked ? s.add(i) : s.delete(i);
+    S.F.pins = s.size ? s : null; onFilterChange();
+  });
+  $('popPin').addEventListener('input', e => { if (e.target.id === 'pinQ') { S.pinQuery = e.target.value; renderPinPop(); } });
+  document.addEventListener('click', e => {
+    const a = e.target.closest('[data-act]');
+    if (a && a.dataset.act === 'cityClear') { S.F.cities = null; S.F.pins = null; renderCityPop(); renderPinPop(); onFilterChange(); }
+    if (a && a.dataset.act === 'pinClear') { S.F.pins = null; renderPinPop(); onFilterChange(); }
+    document.querySelectorAll('details.dd[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+  });
+  ['ddCity', 'ddPin'].forEach(id => $(id).addEventListener('toggle', e => { if (e.target.open) document.querySelectorAll('details.dd[open]').forEach(d => { if (d !== e.target) d.open = false; }); }));
+  const dateChange = () => {
+    let a = E.parseDay($('dFrom').value), b = E.parseDay($('dTo').value); if (a < 0 || b < 0) return;
+    if (a > b) { const t = a; a = b; b = t; $('dFrom').value = E.dayToISO(a); $('dTo').value = E.dayToISO(b); }
+    S.F.dayFrom = a; S.F.dayTo = b; onFilterChange();
+  };
+  $('dFrom').addEventListener('change', dateChange); $('dTo').addEventListener('change', dateChange);
+  $('btnReset').addEventListener('click', () => {
+    const D = S.D; S.F = { cities: null, pins: null, dayFrom: D.hasDate ? D.dayMin : null, dayTo: D.hasDate ? D.dayMax : null }; S.pinQuery = '';
+    buildFilters(); onFilterChange();
+  });
+}
+function renderFilterNote() {
+  const r = S.res, D = S.D, active = S.F.cities || S.F.pins || (D.hasDate && (S.F.dayFrom !== D.dayMin || S.F.dayTo !== D.dayMax));
+  $('filterNote').innerHTML = `<span class="muted" style="font-size:12px">${nf(r.nSel)} order rows in view of ${nf(D.totalOrders)}.` + (S.F.cities || S.F.pins ? ' Lab volumes still count every customer in the date range, so a city or PIN filter does not skew lab decisions.' : '') + '</span>';
+}
+
+/* ---------- summary: headline and KPI tiles ---------- */
+function getSim() {
+  const o = S.sim, key = [o.upgrades, o.closures, o.sites].join();
+  if (!S.sim.cache || S.sim.cache.key !== key) S.sim.cache = { key, v: E.simulate(S.D, S.res, o) };
+  return S.sim.cache.v;
+}
+function renderKPIs() {
+  const r = S.res, k = r.kpi, c = S.cfg;
+  if (!r.nSel) { $('headline').textContent = 'No orders match these filters. Widen the city, PIN or date selection.'; $('kpis').innerHTML = ''; return; }
+  const all = E.simulate(S.D, r, { upgrades: true, closures: true, sites: true });
+  $('headline').innerHTML = `Across <b>${nf(k.orders)}</b> orders (${nf(k.pm)} a month), the average customer travels <b>${num1(k.acd)} km</b> and <b>${num1(k.within)}%</b> of orders are within ${c.dMax} km. ` +
+    `Applying every recommendation below would take that to <b>${num1(all.after.within)}%</b> within ${c.dMax} km, an average of <b>${num1(all.after.acd)} km</b>, and Assured labs from <b>${all.before.assured}</b> to <b>${all.after.assured}</b> of ${all.after.labs}.`;
+  const tiles = [
+    ['Orders in view', nf(k.orders), '', nf(k.pm) + ' a month over ' + num1(r.months) + ' months'],
+    ['Avg customer distance', num1(k.acd), 'km', 'Median ' + num1(k.p50) + ' km, 90th percentile ' + num1(k.p90) + ' km'],
+    ['Within ' + c.dMax + ' km', num1(k.within), '%', num1(k.underserved) + '% have no lab at all within ' + c.dMax + ' km'],
+    ['Labs in view', nf(k.labs), '', k.assured + ' Assured, ' + (k.labs - k.assured) + ' Non-Assured'],
+    ['Orders on Assured labs', num1(k.onAssured), '%', 'Routing favours Assured labs'],
+    ['Actions suggested', nf(r.sites.length + r.counts.upgrade + r.counts.close), '', r.sites.length + ' new labs, ' + r.counts.upgrade + ' upgrades, ' + r.counts.close + ' closures']
+  ];
+  $('kpis').innerHTML = tiles.map(t => `<div class="tile"><div class="l">${esc(t[0])}</div><div class="v">${t[1]}<small>${esc(t[2])}</small></div><div class="s">${esc(t[3])}</div></div>`).join('');
+}
+
+/* ---------- tabs ---------- */
+const TABS = [['sites', 'New labs'], ['upgrades', 'Upgrades'], ['closures', 'Closures'], ['impact', 'Impact'], ['|'], ['params', 'Parameters'], ['data', 'Data'], ['method', 'Method']];
+function renderTabs() {
+  const r = S.res, ct = { sites: r.sites.length, upgrades: r.counts.upgrade, closures: r.counts.close };
+  $('tabs').innerHTML = TABS.map(t => t[0] === '|' ? '<span class="sep"></span>' :
+    `<button type="button" role="tab" data-tab="${t[0]}" aria-selected="${S.tab === t[0]}">${t[1]}${ct[t[0]] != null ? `<span class="ct">${ct[t[0]]}</span>` : ''}</button>`).join('');
+}
+function setTab(t) { S.tab = t; renderTabs(); renderPane(); const p = $('pane'); }
+
+/* ---------- map: tile-free canvas plot with Mercator projection, pan, zoom and hit-testing ---------- */
+const MapView = (function () {
+  const cv = $('map'), ctx = cv.getContext('2d'), card = $('mapcard');
+  const KM = 6371.0088, RAD = Math.PI / 180;
+  const PX = lng => lng * RAD * KM, PY = lat => KM * Math.log(Math.tan(Math.PI / 4 + lat * RAD / 2));
+  const invLng = x => x / KM / RAD, invLat = y => (2 * Math.atan(Math.exp(y / KM)) - Math.PI / 2) / RAD;
+  let W = 0, H = 0, dpr = 1, view = { cx: 0, cy: 0, s: 8 }, X = null, Y = null, dataRef = null, pendingFit = true, colors = null, hits = [], raf = 0, scaleTxt = '';
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+    colors = { bg: g('--map-bg'), grid: g('--grid'), ord: g('--ord'), gap: g('--gap'), accent: g('--accent'), violet: g('--violet'), good: g('--good'), warn: g('--warn'), serious: g('--serious'), crit: g('--crit'), ink: g('--ink'), ink2: g('--ink-2'), ink3: g('--ink-3'), surface: g('--surface'), line: g('--line-2'), accentInk: g('--accent-ink') };
+  }
+  function setData() {
+    const D = S.D; if (!D) return;
+    if (dataRef !== D) { dataRef = D; X = new Float64Array(D.n); Y = new Float64Array(D.n); for (let i = 0; i < D.n; i++) { X[i] = PX(D.lng[i]); Y[i] = PY(D.lat[i]); } pendingFit = true; }
+    if (pendingFit && W && S.res) fit(); else requestDraw();
+  }
+  function resize() {
+    const r = card.getBoundingClientRect(); W = Math.max(1, Math.floor(r.width)); H = Math.max(1, Math.floor(r.height)); dpr = window.devicePixelRatio || 1;
+    cv.width = Math.floor(W * dpr); cv.height = Math.floor(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (pendingFit && S.res) fit(); else requestDraw();
+  }
+  function fit(force) {
+    if (!S.res || !W) { pendingFit = true; return; }
+    const r = S.res, D = S.D; let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+    const add = (x, y) => { if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y; };
+    const sel = r.selIdx, step = Math.max(1, Math.floor(sel.length / 6000));
+    for (let k = 0; k < sel.length; k += step) add(X[sel[k]], Y[sel[k]]);
+    r.labs.forEach(l => { if (l.inScope) add(PX(l.lng), PY(l.lat)); });
+    r.sites.forEach(s => add(PX(s.lng), PY(s.lat)));
+    if (!isFinite(a)) { D.labs.forEach(l => add(PX(l.lng), PY(l.lat))); }
+    if (!isFinite(a)) return;
+    const padX = 70, padY = 90, w = Math.max(c - a, 0.5), h = Math.max(d - b, 0.5);
+    view.cx = (a + c) / 2; view.cy = (b + d) / 2; view.s = Math.max(1.2, Math.min(500, Math.min((W - padX * 2) / w, (H - padY * 2) / h)));
+    pendingFit = false; requestDraw();
+  }
+  function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
+  const sx = x => (x - view.cx) * view.s + W / 2, sy = y => H / 2 - (y - view.cy) * view.s;
+  const centerLat = () => invLat(view.cy), cosC = () => Math.cos(centerLat() * RAD);
+  function groundToPx(km, lat) { return km / Math.cos(lat * RAD) * view.s; }
+
+  function recColor(r) {
+    if (r.cl && r.cl.bucket === 'close') return ['crit', 'x'];
+    if (r.cl && r.cl.bucket === 'fix') return ['serious', '!'];
+    if (r.up && r.up.bucket === 'upgrade') return ['good', 'u'];
+    if (r.up && r.up.bucket === 'queue') return ['good', 'q'];
+    if (r.up && r.up.bucket === 'near') return ['warn', '~'];
+    return ['none', ''];
+  }
+
+  function draw() {
+    if (!colors) readColors();
+    const r = S.res, D = S.D; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.fillStyle = colors.bg; ctx.fillRect(0, 0, W, H);
+    hits = []; if (!r || !D || !X) return;
+    const cfg = S.cfg, circ = cfg.circuity, L = S.layers;
+    /* graticule */
+    const lng0 = invLng(view.cx - W / 2 / view.s), lng1 = invLng(view.cx + W / 2 / view.s), lat0 = invLat(view.cy - H / 2 / view.s), lat1 = invLat(view.cy + H / 2 / view.s);
+    const steps = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10]; let st = steps[steps.length - 1];
+    for (const s of steps) if (s * RAD * KM * view.s >= 90) { st = s; break; }
+    ctx.lineWidth = 1; ctx.strokeStyle = colors.grid; ctx.fillStyle = colors.ink3; ctx.font = '10px IBM Plex Mono, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.beginPath();
+    for (let g = Math.ceil(lng0 / st) * st; g <= lng1; g += st) { const x = Math.round(sx(PX(g))) + .5; ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for (let g = Math.ceil(lat0 / st) * st; g <= lat1; g += st) { const y = Math.round(sy(PY(g))) + .5; ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+    const dec = st < 0.01 ? 3 : st < 0.1 ? 2 : st < 1 ? 1 : 0;
+    for (let g = Math.ceil(lng0 / st) * st; g <= lng1; g += st) { const x = sx(PX(g)); if (x > 40 && x < W - 40) ctx.fillText(g.toFixed(dec) + '°E', x + 3, H - 14); }
+    ctx.textBaseline = 'bottom';
+    for (let g = Math.ceil(lat0 / st) * st; g <= lat1; g += st) { const y = sy(PY(g)); if (y > 60 && y < H - 30) ctx.fillText(g.toFixed(dec) + '°N', 4, y - 2); }
+
+    const cl = cosC();
+    /* catchments of suggested sites */
+    if (L.catch) r.sites.forEach(s => {
+      const x = sx(PX(s.lng)), y = sy(PY(s.lat)), rad = groundToPx(cfg.catchKm / circ, s.lat);
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, 6.2832); ctx.fillStyle = colors.violet; ctx.globalAlpha = .07; ctx.fill(); ctx.globalAlpha = .7; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.2; ctx.strokeStyle = colors.violet; ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    });
+    /* orders */
+    const sel = r.selIdx, n = sel.length, stride = Math.max(1, Math.ceil(n / 70000));
+    const sz = view.s < 6 ? 1.6 : view.s < 15 ? 2.1 : view.s < 40 ? 2.8 : 3.4, dMax = cfg.dMax;
+    const gx = [], gy = [];
+    if (L.orders) ctx.fillStyle = colors.ord;
+    ctx.globalAlpha = .26;
+    for (let k = 0; k < n; k += stride) {
+      const i = sel[k], x = sx(X[i]), y = sy(Y[i]); if (x < -4 || x > W + 4 || y < -4 || y > H + 4) continue;
+      if (D.dN[i] * circ > dMax) { gx.push(x, y); if (!L.orders) continue; }
+      if (L.orders) ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+    }
+    if (L.gaps) { ctx.fillStyle = colors.gap; ctx.globalAlpha = .6; for (let k = 0; k < gx.length; k += 2) ctx.fillRect(gx[k] - sz / 2, gx[k + 1] - sz / 2, sz, sz); }
+    ctx.globalAlpha = 1;
+    /* selection: customers of the chosen lab or site */
+    const sl = S.sel;
+    if (sl) {
+      let pts = null, ox, oy, col = colors.accent;
+      if (sl.type === 'lab') { const l = r.labs[sl.idx]; ox = sx(PX(l.lng)); oy = sy(PY(l.lat)); pts = []; for (let k = 0; k < n; k++) if (D.lab[sel[k]] === sl.idx) pts.push(sel[k]); }
+      else { const s = r.sites[sl.idx]; if (s) { ox = sx(PX(s.lng)); oy = sy(PY(s.lat)); pts = s.pts; col = colors.violet; } }
+      if (pts) {
+        const ps = Math.max(1, Math.ceil(pts.length / 500)); ctx.strokeStyle = col; ctx.globalAlpha = .22; ctx.lineWidth = 1; ctx.beginPath();
+        for (let k = 0; k < pts.length; k += ps) { const i = pts[k]; ctx.moveTo(ox, oy); ctx.lineTo(sx(X[i]), sy(Y[i])); } ctx.stroke();
+        ctx.globalAlpha = .85; ctx.fillStyle = col; const s2 = sz + 1; for (let k = 0; k < pts.length; k += Math.max(1, Math.ceil(pts.length / 6000))) { const i = pts[k]; ctx.fillRect(sx(X[i]) - s2 / 2, sy(Y[i]) - s2 / 2, s2, s2); }
+        ctx.globalAlpha = 1;
+        if (sl.type === 'lab') { const l = r.labs[sl.idx], rad = groundToPx(dMax / circ, l.lat); ctx.beginPath(); ctx.arc(ox, oy, rad, 0, 6.2832); ctx.setLineDash([3, 4]); ctx.strokeStyle = colors.ink2; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]); }
+      }
+    }
+    /* PIN labels */
+    if (L.pins && view.s >= 11) {
+      ctx.font = '10px IBM Plex Mono, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; const boxes = [];
+      for (const p of r.pins.slice(0, 90)) {
+        const x = sx(PX(p.lng)), y = sy(PY(p.lat)); if (x < 20 || x > W - 20 || y < 50 || y > H - 20) continue;
+        const w = ctx.measureText(p.pin).width + 6; if (boxes.some(b => Math.abs(b[0] - x) < (b[2] + w) / 2 && Math.abs(b[1] - y) < 13)) continue; boxes.push([x, y, w]);
+        ctx.lineWidth = 3; ctx.strokeStyle = colors.bg; ctx.strokeText(p.pin, x, y); ctx.fillStyle = colors.ink3; ctx.fillText(p.pin, x, y);
+      }
+    }
+    /* labs */
+    if (L.labs) {
+      const order = r.labs.slice().sort((a, b) => (a.inScope === b.inScope ? 0 : a.inScope ? 1 : -1));
+      for (const l of order) {
+        const x = sx(PX(l.lng)), y = sy(PY(l.lat)); if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+        const rr = Math.max(5, Math.min(14, 4.5 + Math.sqrt(l.pm) * 0.28)); const assured = l.status === 'A';
+        ctx.globalAlpha = l.inScope ? 1 : .35; ctx.lineWidth = 2;
+        let fill, stroke, glyph = '', glyphCol = '#fff';
+        if (S.mode === 'status') { fill = assured ? colors.accent : colors.surface; stroke = assured ? colors.surface : colors.accent; }
+        else { const [c, g] = recColor(l); glyph = g; fill = c === 'none' ? colors.ink3 : colors[c]; stroke = colors.surface; if (g === 'q') { fill = colors.surface; stroke = colors.good; glyphCol = colors.good; } if (c === 'warn') glyphCol = '#2b2100'; if (c === 'none') { ctx.globalAlpha = l.inScope ? .75 : .3; } }
+        ctx.beginPath(); if (S.mode === 'rec' && !assured) ctx.rect(x - rr, y - rr, rr * 2, rr * 2); else ctx.arc(x, y, rr, 0, 6.2832);
+        ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.stroke();
+        if (glyph) { ctx.fillStyle = glyphCol; ctx.font = 'bold ' + Math.round(rr + 1) + 'px IBM Plex Sans, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(glyph === 'u' || glyph === 'q' ? '▲' : glyph === 'x' ? '✕' : glyph, x, y + (glyph === 'u' || glyph === 'q' ? 0 : 0.5)); }
+        ctx.globalAlpha = 1;
+        if (sl && sl.type === 'lab' && sl.idx === l.idx) { ctx.beginPath(); ctx.arc(x, y, rr + 5, 0, 6.2832); ctx.lineWidth = 2.5; ctx.strokeStyle = colors.ink; ctx.stroke(); }
+        hits.push({ x, y, r: rr + 4, type: 'lab', idx: l.idx });
+      }
+    }
+    /* suggested sites */
+    r.sites.forEach((s, k) => {
+      const x = sx(PX(s.lng)), y = sy(PY(s.lat)), rr = 11;
+      ctx.beginPath(); ctx.moveTo(x, y - rr); ctx.lineTo(x + rr, y); ctx.lineTo(x, y + rr); ctx.lineTo(x - rr, y); ctx.closePath();
+      ctx.fillStyle = colors.violet; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = colors.surface; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px IBM Plex Sans, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(s.rank), x, y + .5);
+      if (sl && sl.type === 'site' && sl.idx === k) { ctx.beginPath(); ctx.arc(x, y, rr + 6, 0, 6.2832); ctx.lineWidth = 2.5; ctx.strokeStyle = colors.ink; ctx.stroke(); }
+      hits.push({ x, y, r: rr + 3, type: 'site', idx: k });
+    });
+    /* scale bar text */
+    const pxPerGroundKm = view.s / cl; const nice = [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500]; let L2 = nice[0];
+    for (const v of nice) { L2 = v; if (v * pxPerGroundKm >= 70) break; }
+    const t = L2 + ' km|' + Math.round(L2 * pxPerGroundKm); { const el = $('scaleBar'); if (el && el.dataset.t !== t) { el.dataset.t = t; el.firstChild.style.width = Math.round(L2 * pxPerGroundKm) + 'px'; el.lastChild.textContent = (L2 < 1 ? L2 * 1000 + ' m' : L2 + ' km'); } }
+  }
+
+  /* interaction */
+  const ptrs = new Map(); let drag = null, pinch = null, downAt = null;
+  const pos = e => { const b = cv.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  function zoomAt(px, py, f) {
+    const ns = Math.max(1, Math.min(900, view.s * f)); const wx = view.cx + (px - W / 2) / view.s, wy = view.cy - (py - H / 2) / view.s;
+    view.s = ns; view.cx = wx - (px - W / 2) / ns; view.cy = wy + (py - H / 2) / ns; requestDraw();
+  }
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId); const p = pos(e); ptrs.set(e.pointerId, p); hideTip();
+    if (ptrs.size === 1) { drag = { x: p.x, y: p.y, cx: view.cx, cy: view.cy, moved: 0 }; downAt = p; }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), s: view.s }; drag = null; }
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e);
+    if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, p);
+    if (pinch && ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (pinch.s * d / pinch.d) / view.s); return; }
+    if (drag && ptrs.size === 1) {
+      const dx = p.x - drag.x, dy = p.y - drag.y; drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
+      if (drag.moved > 3) { cv.classList.add('drag'); view.cx = drag.cx - dx / view.s; view.cy = drag.cy + dy / view.s; requestDraw(); }
+      return;
+    }
+    if (!ptrs.size) hoverAt(e, p);
+  });
+  const end = e => {
+    const p = pos(e); const wasClick = drag && drag.moved <= 3 && ptrs.size === 1;
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) { drag = null; cv.classList.remove('drag'); }
+    if (wasClick && e.type === 'pointerup') clickAt(p);
+  };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', hideTip);
+  cv.addEventListener('wheel', e => { e.preventDefault(); const p = pos(e); zoomAt(p.x, p.y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0016))); }, { passive: false });
+  function hitAt(p) { let best = null, bd = Infinity; for (const h of hits) { const d = Math.hypot(h.x - p.x, h.y - p.y); if (d <= h.r && d < bd) { bd = d; best = h; } } return best; }
+  function hoverAt(e, p) {
+    const h = hitAt(p); cv.style.cursor = h ? 'pointer' : '';
+    if (!h) return hideTip();
+    const r = S.res; let html;
+    if (h.type === 'lab') { const l = r.labs[h.idx]; html = `<b>${esc(l.name)}</b><span class="mono">${l.status === 'A' ? 'Assured' : 'Non-Assured'} · ${nf(l.pm)} orders/mo</span>`; }
+    else { const s = r.sites[h.idx]; html = `<b>Suggested lab ${s.rank}: ${esc(s.pin)}, ${esc(s.city)}</b><span class="mono">${nf(s.pm)} orders/mo captured</span>`; }
+    showTip(html, e.clientX, e.clientY);
+  }
+  function clickAt(p) {
+    const h = hitAt(p);
+    if (!h) { if (S.sel) { S.sel = null; renderMapInfo(); renderPane(); requestDraw(); } return; }
+    selectItem(h.type, h.idx, false);
+  }
+  function flyTo(lat, lng, s) {
+    const tx = PX(lng), ty = PY(lat), ts = s || view.s; if (reduce) { view.cx = tx; view.cy = ty; view.s = ts; requestDraw(); return; }
+    const a = { cx: view.cx, cy: view.cy, s: view.s }, t0 = performance.now(), dur = 380;
+    const step = now => { const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3); view.cx = a.cx + (tx - a.cx) * e; view.cy = a.cy + (ty - a.cy) * e; view.s = Math.exp(Math.log(a.s) + (Math.log(ts) - Math.log(a.s)) * e); draw(); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+  const ro = new ResizeObserver(() => resize()); ro.observe(card);
+  const rc = () => { colors = null; requestDraw(); };
+  if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rc);
+  new MutationObserver(rc).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  $('zIn').onclick = () => zoomAt(W / 2, H / 2, 1.5); $('zOut').onclick = () => zoomAt(W / 2, H / 2, 1 / 1.5); $('zFit').onclick = () => fit(true);
+  return { setData, fit, draw: requestDraw, flyTo, resize, focusLab(i) { const l = S.res.labs[i]; flyTo(l.lat, l.lng, Math.max(view.s, 30)); }, focusSite(i) { const s = S.res.sites[i]; flyTo(s.lat, s.lng, Math.max(view.s, 22)); }, focusPoint(lat, lng) { flyTo(lat, lng, Math.max(view.s, 26)); } };
+})();
+
+/* shared tooltip */
+function showTip(html, cx, cy) { const t = $('tip'); t.innerHTML = html; t.hidden = false; const w = t.offsetWidth, h = t.offsetHeight; let x = cx + 14, y = cy + 14; if (x + w > innerWidth - 8) x = cx - w - 14; if (y + h > innerHeight - 8) y = cy - h - 14; t.style.left = Math.max(4, x) + 'px'; t.style.top = Math.max(4, y) + 'px'; }
+function hideTip() { $('tip').hidden = true; }
+
+/* selecting a lab or site from the map or a table */
+function selectItem(type, idx, fly) {
+  S.sel = { type, idx };
+  if (type === 'lab') { const l = S.res.labs[idx]; if (S.tab !== 'upgrades' && S.tab !== 'closures') { /* keep the user's tab */ } }
+  if (fly) { type === 'lab' ? MapView.focusLab(idx) : MapView.focusSite(idx); }
+  renderMapInfo(); renderPane(true); MapView.draw();
+  const row = document.querySelector('tr.sel'); if (row && !fly) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/* map overlays */
+function renderMapTools() {
+  const L = S.layers, el = $('mapTools');
+  const chip = (k, label, dot) => `<button class="chip" type="button" data-layer="${k}" aria-pressed="${L[k]}">${dot ? `<span class="dot" style="background:${dot}"></span>` : ''}${label}</button>`;
+  el.innerHTML = `<span class="seg" role="group" aria-label="Colour labs by"><button type="button" data-mode="status" aria-pressed="${S.mode === 'status'}">Lab type</button><button type="button" data-mode="rec" aria-pressed="${S.mode === 'rec'}">Recommendation</button></span>` +
+    chip('orders', 'Orders', 'var(--ord)') + chip('gaps', 'Underserved', 'var(--gap)') + chip('catch', 'Catchments', 'var(--violet)') + chip('pins', 'PIN codes', '') + chip('labs', 'Labs', 'var(--accent)');
+}
+$('mapTools').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.layer) S.layers[b.dataset.layer] = !S.layers[b.dataset.layer];
+  if (b.dataset.mode) S.mode = b.dataset.mode;
+  renderMapTools(); renderLegend(); MapView.draw();
+});
+function renderLegend() {
+  const c = S.cfg, ic = (svg) => `<svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true">${svg}</svg>`;
+  let rows;
+  if (S.mode === 'status') rows = [
+    [ic('<circle cx="9" cy="8" r="5.5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>'), 'Assured lab'],
+    [ic('<circle cx="9" cy="8" r="5.5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>'), 'Non-Assured lab']];
+  else rows = [
+    [ic('<circle cx="9" cy="8" r="6" fill="var(--good)"/><path d="M9 4.5l3 6H6z" fill="#fff"/>'), 'Upgrade to Assured'],
+    [ic('<circle cx="9" cy="8" r="5.5" fill="var(--surface)" stroke="var(--good)" stroke-width="1.6"/><path d="M9 5l2.6 5H6.4z" fill="var(--good)"/>'), 'Upgrade queue (cap)'],
+    [ic('<circle cx="9" cy="8" r="6" fill="var(--warn)"/>'), 'Near miss'],
+    [ic('<circle cx="9" cy="8" r="6" fill="var(--crit)"/><path d="M6.5 5.5l5 5M11.5 5.5l-5 5" stroke="#fff" stroke-width="1.6"/>'), 'Close'],
+    [ic('<circle cx="9" cy="8" r="6" fill="var(--serious)"/><rect x="8.2" y="4.5" width="1.6" height="4.2" fill="#fff"/><rect x="8.2" y="9.6" width="1.6" height="1.6" fill="#fff"/>'), 'Fix or watchlist'],
+    [ic('<circle cx="9" cy="8" r="5" fill="var(--ink-3)" opacity=".75"/>'), 'No action (square = Non-Assured)']];
+  rows.push([ic('<path d="M9 1.5l6.5 6.5L9 14.5 2.5 8z" fill="var(--violet)" stroke="var(--surface)" stroke-width="1.5"/>'), 'Suggested new lab']);
+  rows.push([ic('<circle cx="9" cy="8" r="2.4" fill="var(--gap)"/>'), 'Order with no lab within ' + c.dMax + ' km']);
+  $('legend').innerHTML = rows.map(r => `<div class="li">${r[0]}<span>${r[1]}</span></div>`).join('') + '<div class="li" style="color:var(--ink-3)">Marker size = orders a month. Scroll to zoom, drag to pan.</div><div class="scale" id="scaleBar"><div class="bar" style="width:70px"></div><span></span></div>';
+}
+function pillFor(b) {
+  const m = { upgrade: ['p-good', '▲', 'Upgrade now'], queue: ['p-queue', '▲', 'Queue (cap)'], near: ['p-warn', '~', 'Near miss'], no: ['p-neutral', '', 'Not eligible'], assured: ['p-blue', '', 'Assured'],
+    close: ['p-crit', '✕', 'Close'], fix: ['p-serious', '!', 'Fix or watch'], keep: ['p-neutral', '', 'Keep'] }[b] || ['p-neutral', '', b];
+  return `<span class="pill ${m[0]}">${m[1] ? `<i>${m[1]}</i>` : ''}${m[2]}</span>`;
+}
+function renderMapInfo() {
+  const el = $('mapInfo'), sl = S.sel; if (!sl || !S.res) { el.hidden = true; return; }
+  const r = S.res, c = S.cfg; let h = '';
+  if (sl.type === 'lab') {
+    const l = r.labs[sl.idx]; if (!l) { el.hidden = true; return; }
+    h = `<button class="x" type="button" data-act="closeInfo" aria-label="Close">&times;</button><h4>${esc(l.name)}</h4><div>${l.status === 'A' ? '<span class="pill p-blue">Assured</span>' : '<span class="pill p-neutral">Non-Assured</span>'} <span class="muted">${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></div>
+    <dl><dt>Orders a month</dt><dd>${nf(l.pm)}</dd><dt>Avg customer distance</dt><dd>${num1(l.avgDist)} km</dd><dt>90th percentile</dt><dd>${num1(l.p90)} km</dd><dt>Beyond ${c.dMax} km</dt><dd>${nf(l.farShare * 100)}%</dd>
+    <dt>TAT breach</dt><dd>${num1(l.breach)}% (${num1(l.breachLo)} to ${num1(l.breachHi)})</dd><dt>NPS</dt><dd>${nf(l.nps)} (${nf(l.npsLo)} to ${nf(l.npsHi)})</dd>${l.util != null ? `<dt>Capacity used</dt><dd>${nf(l.util * 100)}%</dd>` : ''}${isFinite(l.score) ? `<dt>Score</dt><dd>${nf(l.score)}</dd>` : ''}</dl>`;
+    if (l.inScope) { if (l.up.bucket !== 'assured') h += `<div>${pillFor(l.up.bucket)}</div><p>${esc(l.up.why)}</p>`; if (l.cl.bucket !== 'keep') h += `<div style="margin-top:8px">${pillFor(l.cl.bucket)}</div><p>${esc(l.cl.why)}</p>`; else if (l.up.bucket === 'assured') h += `<p>${esc(l.cl.why)}</p>`; }
+    else h += '<p class="muted">Outside the current city or PIN selection.</p>';
+  } else {
+    const s = r.sites[sl.idx]; if (!s) { el.hidden = true; return; }
+    const osm = `https://www.openstreetmap.org/?mlat=${s.lat.toFixed(5)}&mlon=${s.lng.toFixed(5)}#map=15/${s.lat.toFixed(5)}/${s.lng.toFixed(5)}`;
+    h = `<button class="x" type="button" data-act="closeInfo" aria-label="Close">&times;</button><h4>Suggested lab ${s.rank}: ${esc(s.pin)}, ${esc(s.city)}</h4><div><span class="pill p-violet">${esc(s.type)}</span></div>
+    <dl><dt>Orders captured a month</dt><dd>${nf(s.pm)}</dd><dt>Avg distance now</dt><dd>${num1(s.before)} km</dd><dt>Avg distance after</dt><dd>${num1(s.after)} km</dd><dt>Nearest existing lab</dt><dd>${num1(s.nearestLab)} km</dd><dt>Nearest Assured lab</dt><dd>${s.nearestAssured == null ? 'none' : num1(s.nearestAssured) + ' km'}</dd><dt>Coordinates</dt><dd>${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</dd></dl>
+    <p>${esc(s.why)}</p><p><a href="${osm}" target="_blank" rel="noopener">Open this spot in OpenStreetMap</a></p>`;
+  }
+  el.innerHTML = h; el.hidden = false;
+}
+document.addEventListener('click', e => { const a = e.target.closest('[data-act="closeInfo"]'); if (a) { S.sel = null; renderMapInfo(); renderPane(true); MapView.draw(); } });
+
+/* ---------- decision panels ---------- */
+const PANES = {};
+function renderPane(opt) {
+  const t = S.tab, el = $('pane');
+  if ((t === 'params' || t === 'data') && S.paneTab === t && opt !== 'force') return;
+  S.paneTab = t; const y = window.scrollY;
+  el.innerHTML = PANES[t](); if (PANES[t + 'After']) PANES[t + 'After']();
+  if (opt === true) window.scrollTo(0, y);
+}
+const zlabel = z => ({ 0.8416: '80%', 1.2816: '90%', 1.6449: '95%', 2.3263: '99%' }[z] || z);
+const dlt = (a, b, lowerBetter, d = 1, unit = '') => { const x = b - a; if (!isFinite(x) || Math.abs(x) < Math.pow(10, -d) / 2) return '<span class="muted">0</span>'; const good = lowerBetter ? x < 0 : x > 0; return `<span style="color:var(--${good ? 'good' : 'crit'}-ink)">${x > 0 ? '+' : ''}${nf(x, d)}${unit}</span>`; };
+const selRow = (type, idx) => S.sel && S.sel.type === type && S.sel.idx === idx ? ' sel' : '';
+const csvName = s => s + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+
+/* ---- new labs ---- */
+PANES.sites = function () {
+  const r = S.res, c = S.cfg; if (!r.nSel) return '<div class="empty">No orders match these filters.</div>';
+  const cap = r.sites.reduce((a, s) => a + s.pm, 0);
+  let h = `<p class="note">A new lab goes where customers have <b>no lab within ${c.dMax} km</b> of road distance. Candidate spots come from a ${c.gridKm} km grid over those orders, and the spot that saves the most travel is picked first. A spot is kept only if it captures at least <b>${c.minViable} orders a month</b>, saves at least <b>${c.minGainKm} km</b> per order, and sits at least ${c.minSepKm} km from any lab.</p>
+  <div class="sumrow"><span class="pill p-violet">${r.sites.length} suggested ${r.sites.length === 1 ? 'lab' : 'labs'}</span><span class="pill p-neutral">${nf(cap)} orders a month captured</span><span class="pill p-neutral">${nf(r.siteUnservedOrders / r.months)} underserved orders a month still uncovered</span>
+  ${r.sites.length ? '<button class="btn sm" type="button" data-act="exportSites">Export CSV</button>' : ''}</div>`;
+  if (!r.sites.length) {
+    const upm = r.kpi.underOrders / r.months;
+    h += `<div class="empty"><b>No area qualifies right now.</b> ${upm < 1 ? 'Every order in view has a lab within ' + c.dMax + ' km.' : nf(upm) + ' orders a month in this view have no lab within ' + c.dMax + ' km, but they are too spread out or too thin to pass the viability tests. Lower <i>Minimum orders a month for a new lab</i> or widen the <i>catchment radius</i> in Parameters, or widen the city selection.'}</div>`;
+  } else {
+    h += '<div class="tw"><table><thead><tr><th>#</th><th>Where</th><th class="r">Orders / mo</th><th class="r">Avg km</th><th>Type</th></tr></thead><tbody>' +
+      r.sites.map((s, k) => `<tr class="click${selRow('site', k)}" data-sel="site:${k}"><td class="num"><span class="pill p-violet">${s.rank}</span></td><td><span class="t">${esc(s.pin)}, ${esc(s.city)}</span><span class="sub">Nearest lab ${num1(s.nearestLab)} km. Nearest Assured ${s.nearestAssured == null ? 'none' : num1(s.nearestAssured) + ' km'}.</span><span class="why">${esc(s.why)}</span></td>
+      <td class="r">${nf(s.pm)}<span class="pm">${nf(s.withinAfter)}% within ${c.dMax} km after</span></td><td class="r">${num1(s.before)} to ${num1(s.after)}<span class="pm">${nf(-s.gainPct)}%</span></td><td><span class="pill ${s.type === 'Assured-track' ? 'p-blue' : 'p-neutral'}">${esc(s.type)}</span></td></tr>`).join('') + '</tbody></table></div>';
+    h += `<p class="note muted">Assured-track means the area has no Assured lab within ${c.catchKm} km, or demand is at least ${c.assuredTrackOrders} orders a month. A new lab has no track record, so it starts on probation and earns Assured status through the Upgrades rules.</p>`;
+  }
+  const gaps = r.pins.filter(p => p.underOrders > 0).slice(0, 10);
+  h += '<h3>Demand gaps by PIN code <small>where customers sit furthest from any lab</small></h3>';
+  h += gaps.length ? '<div class="tw"><table><thead><tr><th>PIN</th><th>City</th><th class="r">Orders / mo</th><th class="r">Avg km</th><th class="r">Underserved / mo</th><th>Site</th></tr></thead><tbody>' +
+    gaps.map(p => `<tr class="click" data-pt="${p.lat},${p.lng}"><td class="num">${esc(p.pin)}</td><td>${esc(p.city)}</td><td class="r">${nf(p.pm)}</td><td class="r">${num1(p.avgDist)}</td><td class="r">${nf(p.underOrders / r.months)}<span class="pm">${nf(p.underPct)}% of PIN</span></td><td>${p.site ? `<span class="pill p-violet">${p.site}</span>` : '<span class="muted">none</span>'}</td></tr>`).join('') + '</tbody></table></div>' : '<p class="note muted">No PIN code has orders beyond the acceptable distance from every lab.</p>';
+  return h;
+};
+
+/* ---- charts ---- */
+function scatter(mode) {
+  const r = S.res, c = S.cfg, labs = r.scope; if (!labs.length) return '';
+  const Wd = 520, Ht = 290, ml = 40, mr = 12, mt = 10, mb = 36;
+  const xmax = Math.max(40, Math.ceil(Math.max(...labs.map(l => l.breach)) / 5) * 5), ymin = Math.min(-10, Math.floor(Math.min(...labs.map(l => l.nps)) / 10) * 10), ymax = 100;
+  const X = v => ml + (v / xmax) * (Wd - ml - mr), Y = v => mt + (1 - (v - ymin) / (ymax - ymin)) * (Ht - mt - mb);
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="TAT breach against NPS for each lab, sized by orders">`;
+  for (let v = 0; v <= xmax; v += 10) s += `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${mt}" y2="${Ht - mb}"/><text x="${X(v)}" y="${Ht - mb + 14}" text-anchor="middle">${v}%</text>`;
+  for (let v = Math.ceil(ymin / 20) * 20; v <= ymax; v += 20) s += `<line class="gl" x1="${ml}" x2="${Wd - mr}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${ml - 6}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`;
+  s += `<text x="${(ml + Wd - mr) / 2}" y="${Ht - 4}" text-anchor="middle" class="lbl">TAT breach (lower is better)</text><text transform="translate(11 ${(mt + Ht - mb) / 2}) rotate(-90)" text-anchor="middle" class="lbl">NPS</text>`;
+  if (mode === 'up') {
+    s += `<rect x="${X(0)}" y="${Y(ymax)}" width="${X(c.upBreachMax) - X(0)}" height="${Y(c.upNpsMin) - Y(ymax)}" style="fill:var(--good);opacity:.07"/><line class="gate" x1="${X(c.upBreachMax)}" x2="${X(c.upBreachMax)}" y1="${mt}" y2="${Ht - mb}"/><line class="gate" x1="${ml}" x2="${Wd - mr}" y1="${Y(c.upNpsMin)}" y2="${Y(c.upNpsMin)}"/><text x="${X(0) + 5}" y="${Y(ymax) + 12}" style="fill:var(--good-ink)">Upgrade zone</text>`;
+  } else {
+    s += `<rect x="${X(c.clBreachMin)}" y="${mt}" width="${X(xmax) - X(c.clBreachMin)}" height="${Ht - mb - mt}" style="fill:var(--crit);opacity:.06"/><rect x="${ml}" y="${Y(c.clNpsMax)}" width="${Wd - ml - mr}" height="${Y(ymin) - Y(c.clNpsMax)}" style="fill:var(--crit);opacity:.06"/><line class="gate" x1="${X(c.clBreachMin)}" x2="${X(c.clBreachMin)}" y1="${mt}" y2="${Ht - mb}"/><line class="gate" x1="${ml}" x2="${Wd - mr}" y1="${Y(c.clNpsMax)}" y2="${Y(c.clNpsMax)}"/><text x="${Wd - mr - 4}" y="${mt + 12}" text-anchor="end" style="fill:var(--crit-ink)">Weak zone</text>`;
+  }
+  const col = l => {
+    if (l.status === 'A') return ['accent', 1];
+    if (mode === 'up') return { upgrade: ['good', 1], queue: ['good', 0], near: ['warn', 1], no: ['ink-3', 1] }[l.up.bucket] || ['ink-3', 1];
+    return { close: ['crit', 1], fix: ['serious', 1], keep: ['ink-3', 1] }[l.cl.bucket] || ['ink-3', 1];
+  };
+  const flag = l => mode === 'up' ? (l.up.bucket === 'upgrade' || l.up.bucket === 'queue' || l.up.bucket === 'near') : (l.cl.bucket === 'close' || l.cl.bucket === 'fix');
+  labs.slice().sort((a, b) => b.pm - a.pm).forEach(l => {
+    const [cn, fill] = col(l), rr = 3.5 + Math.sqrt(l.pm) * 0.22;
+    s += `<circle cx="${X(l.breach)}" cy="${Y(l.nps)}" r="${rr}" data-tip="${esc('<b>' + l.name + '</b><span class="mono">' + (l.status === 'A' ? 'Assured' : 'Non-Assured') + ' · ' + nf(l.pm) + ' orders/mo<br>TAT breach ' + num1(l.breach) + '% · NPS ' + nf(l.nps) + '</span>')}" data-lab="${l.idx}" style="fill:${fill ? 'var(--' + cn + ')' : 'var(--surface)'};fill-opacity:${fill ? .78 : 1};stroke:var(--${cn});stroke-width:${fill ? 1 : 1.8};cursor:pointer"/>`;
+  });
+  const placed = [];
+  labs.filter(flag).sort((a, b) => a.nps - b.nps).slice(0, 12).forEach(l => {
+    const nm = l.name.length > 16 ? l.name.slice(0, 15) + '\u2026' : l.name, w = nm.length * 5.4, x = X(l.breach) + 8 + Math.sqrt(l.pm) * 0.22; let y = Y(l.nps) + 3;
+    for (let t = 0; t < 14 && placed.some(p => x < p[0] + p[2] && x + w > p[0] && Math.abs(y - p[1]) < 11); t++) y += 11;
+    if (y > Ht - mb - 3) return;
+    placed.push([x, y, w]); s += `<text class="lbl" x="${x}" y="${y}" style="pointer-events:none">${esc(nm)}</text>`;
+  });
+  s += '</svg>';
+  const lg = mode === 'up' ? [['accent', 'Assured'], ['good', 'Upgrade now'], ['warn', 'Near miss'], ['ink-3', 'Not eligible']] : [['accent', 'Assured'], ['crit', 'Close'], ['serious', 'Fix or watch'], ['ink-3', 'Keep']];
+  return `<div class="chart"><h4>${mode === 'up' ? 'Quality map: who sits in the upgrade zone' : 'Quality map: who sits in the weak zone'}</h4><div class="lg">${lg.map(x => `<span><i style="background:var(--${x[0]})"></i>${x[1]}</span>`).join('')}<span style="color:var(--ink-3)">Bubble size shows orders per month. Dashed lines show the thresholds on observed values. Decisions use the confidence-adjusted values.</span></div>${s}</div>`;
+}
+function histChart(a, b) {
+  const Wd = 520, Ht = 230, ml = 34, mr = 8, mt = 8, mb = 34, n = a.share.length, gw = (Wd - ml - mr) / n, bw = Math.min(24, gw / 2 - 3);
+  const ymax = Math.max(10, Math.ceil(Math.max(...a.share, ...b.share) / 10) * 10), Y = v => mt + (1 - v / ymax) * (Ht - mt - mb);
+  const lbl = a.edges.map((e, i) => i === n ? null : (a.edges[i + 1] === Infinity ? e + '+' : e + '-' + a.edges[i + 1]));
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="Distribution of customer travel distance before and after">`;
+  for (let v = 0; v <= ymax; v += ymax / 4) s += `<line class="gl" x1="${ml}" x2="${Wd - mr}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${ml - 5}" y="${Y(v) + 3}" text-anchor="end">${nf(v)}%</text>`;
+  for (let i = 0; i < n; i++) {
+    const cx = ml + gw * i + gw / 2;
+    [[a.share[i], 'accent', -bw - 1, 'Before'], [b.share[i], 'orange', 1, 'After']].forEach(([v, c, off, nm]) => {
+      const y = Y(v), h = Ht - mb - y;
+      s += `<path d="M${cx + off} ${Ht - mb} V${y + 3} Q${cx + off} ${y} ${cx + off + 3} ${y} H${cx + off + bw - 3} Q${cx + off + bw} ${y} ${cx + off + bw} ${y + 3} V${Ht - mb} Z" style="fill:var(--${c})" data-tip="${esc('<b>' + lbl[i] + ' km</b><span class="mono">' + nm + ': ' + num1(v) + '% of orders</span>')}"/>`;
+    });
+    s += `<text x="${cx}" y="${Ht - mb + 14}" text-anchor="middle">${lbl[i]}</text>`;
+  }
+  const dm = S.cfg.dMax; let pos = null; for (let i = 0; i < n; i++) if (dm >= a.edges[i] && dm < a.edges[i + 1]) pos = i + (a.edges[i + 1] === Infinity ? 0 : (dm - a.edges[i]) / (a.edges[i + 1] - a.edges[i]));
+  if (pos != null) s += `<line class="gate" x1="${ml + gw * pos}" x2="${ml + gw * pos}" y1="${mt}" y2="${Ht - mb}"/><text x="${ml + gw * pos + 4}" y="${mt + 10}" class="lbl">${dm} km limit</text>`;
+  s += `<text x="${(ml + Wd - mr) / 2}" y="${Ht - 3}" text-anchor="middle" class="lbl">Road distance from customer to lab (km)</text></svg>`;
+  return `<div class="chart"><h4>How far customers travel</h4><div class="lg"><span><i style="background:var(--accent)"></i>Today</span><span><i style="background:var(--orange)"></i>After the selected actions</span></div>${s}</div>`;
+}
+
+/* ---- upgrades ---- */
+PANES.upgrades = function () {
+  const r = S.res, c = S.cfg; if (!r.scope.length) return '<div class="empty">No labs in this view.</div>';
+  const cnt = r.counts, F = S.upFilter, ord = { upgrade: 0, queue: 1, near: 2, no: 3 };
+  const rows = r.scope.filter(l => l.status === 'N' && F[l.up.bucket]).sort((a, b) => ord[a.up.bucket] - ord[b.up.bucket] || b.score - a.score);
+  const nScope = r.scope.length, allowed = Math.floor(c.assuredCapPct / 100 * nScope + 1e-9);
+  const chip = (k, label, n) => `<button class="chip" type="button" data-upf="${k}" aria-pressed="${F[k]}">${label} <b class="mono">${n}</b></button>`;
+  let h = `<p class="note">A Non-Assured lab is ready for Assured when its TAT breach and NPS clear the thresholds <b>after a confidence adjustment</b> (${zlabel(c.zConf)} one-sided), it has at least ${c.upVolMin} orders a month, and its score is at least ${c.upScoreMin}. Volume is deliberately a low bar: the ordering page already sends fewer orders to Non-Assured labs, so a good lab with modest volume is exactly the one to upgrade.</p>
+  <div class="sumrow"><div class="fchips">${chip('upgrade', 'Upgrade now', cnt.upgrade)}${chip('queue', 'Queue', cnt.queue)}${chip('near', 'Near miss', cnt.near)}${chip('no', 'Not eligible', cnt.no)}</div><button class="btn sm" type="button" data-act="exportUp">Export CSV</button></div>
+  <p class="note muted">Assured cap: ${c.assuredCapPct}% of ${nScope} labs is ${allowed} Assured labs. ${r.kpi.assured} today, so ${r.slots} ${r.slots === 1 ? 'slot is' : 'slots are'} free.</p>`;
+  h += scatter('up');
+  h += rows.length ? '<div class="tw"><table><thead><tr><th>Lab</th><th class="r">Orders / mo</th><th class="r">TAT breach</th><th class="r">NPS</th><th class="r">Score</th><th>Decision</th></tr></thead><tbody>' +
+    rows.map(l => `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">upper ${num1(l.breachHi)}%</span></td><td class="r">${nf(l.nps)}<span class="pm">lower ${nf(l.npsLo)}</span></td><td class="r">${nf(l.score)}</td><td>${pillFor(l.up.bucket)}</td></tr><tr class="click whyrow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td colspan="6">${esc(l.up.why)}</td></tr>`).join('') + '</tbody></table></div>' :
+    '<div class="empty">No labs in the selected groups. Turn a group back on above.</div>';
+  return h;
+};
+
+/* ---- closures ---- */
+PANES.closures = function () {
+  const r = S.res, c = S.cfg; if (!r.scope.length) return '<div class="empty">No labs in this view.</div>';
+  const cnt = r.counts, F = S.clFilter, ord = { close: 0, fix: 1, keep: 2 }, keepN = r.scope.filter(l => l.cl.bucket === 'keep').length;
+  const rows = r.scope.filter(l => F[l.cl.bucket]).sort((a, b) => ord[a.cl.bucket] - ord[b.cl.bucket] || a.score - b.score);
+  const chip = (k, label, n) => `<button class="chip" type="button" data-clf="${k}" aria-pressed="${F[k]}">${label} <b class="mono">${n}</b></button>`;
+  let h = `<p class="note">A lab is closed only when <b>all three</b> hold. First, it is weak: TAT breach at or above ${c.clBreachMin}% or NPS at or below ${c.clNpsMax}, judged on the confidence bound. Second, it is thin: under ${c.clVolMax} orders a month. Third, its customers can be moved without harm: average extra travel at most ${c.clMaxAddKm} km, at most ${c.clMaxPushedPct}% of its orders pushed beyond ${c.dMax} km, and receiving labs stay under ${c.clUtilCap}% of capacity. Weak labs that fail the move test are listed as fix or watch, because closing them would hurt customers.</p>
+  <div class="sumrow"><div class="fchips">${chip('close', 'Close', cnt.close)}${chip('fix', 'Fix or watch', cnt.fix)}${chip('keep', 'Keep', keepN)}</div><button class="btn sm" type="button" data-act="exportCl">Export CSV</button></div>`;
+  h += scatter('cl');
+  h += rows.length ? '<div class="tw"><table><thead><tr><th>Lab</th><th class="r">Orders / mo</th><th class="r">TAT breach</th><th class="r">NPS</th><th class="r">If closed</th><th>Decision</th></tr></thead><tbody>' +
+    rows.map(l => { const t = l.cl.tests; return `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.status === 'A' ? 'Assured' : 'Non-Assured')}, ${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">lower ${num1(l.breachLo)}%</span></td><td class="r">${nf(l.nps)}<span class="pm">upper ${nf(l.npsHi)}</span></td>
+    <td class="r">${t ? (t.addKm >= 0 ? '+' : '') + num1(t.addKm) + ' km<span class="pm">' + nf(t.pushed) + '% beyond ' + c.dMax + ' km</span>' + (t.maxUtil != null ? '<span class="pm">receivers ' + nf(t.maxUtil * 100) + '% full</span>' : '') : '<span class="muted">not tested</span>'}</td><td>${pillFor(l.cl.bucket)}</td></tr><tr class="click whyrow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td colspan="6">${esc(l.cl.why)}</td></tr>`; }).join('') + '</tbody></table></div>' :
+    '<div class="empty">Nothing in the selected groups.</div>';
+  return h;
+};
+
+/* ---- impact ---- */
+PANES.impact = function () {
+  const r = S.res; if (!r.nSel) return '<div class="empty">No orders match these filters.</div>';
+  const o = S.sim, sim = getSim(), b = sim.before, a = sim.after, c = S.cfg;
+  const tg = (k, label, n) => `<label class="chip" style="cursor:pointer"><input type="checkbox" data-sim="${k}" ${o[k] ? 'checked' : ''}> ${label} <b class="mono">${n}</b></label>`;
+  const row = (l, x, y, lower, d, unit) => `<tr><td>${l}</td><td class="r">${nf(x, d)}${unit}</td><td class="r">${nf(y, d)}${unit}</td><td class="r">${dlt(x, y, lower, d, unit)}</td></tr>`;
+  return `<p class="note">Switch recommendations on or off to see their combined effect on the orders in view. Customers of closed labs move to the nearest remaining lab, customers inside a new lab's catchment move to it, and upgrades raise the share of orders routed to Assured labs.</p>
+  <div class="fchips">${tg('sites', 'New labs', r.sites.length)}${tg('closures', 'Closures', r.counts.close)}${tg('upgrades', 'Upgrades', r.counts.upgrade)}</div>
+  <div class="tw"><table><thead><tr><th>Measure</th><th class="r">Today</th><th class="r">After</th><th class="r">Change</th></tr></thead><tbody>
+  ${row('Labs in network', b.labs, a.labs, false, 0, '')}${row('Assured labs', b.assured, a.assured, false, 0, '')}${row('Orders on Assured labs (estimate)', b.assuredShare, a.assuredShare, false, 1, '%')}
+  ${row('Average customer distance', b.acd, a.acd, true, 1, ' km')}${row('Median distance', b.p50, a.p50, true, 1, ' km')}${row('90th percentile distance', b.p90, a.p90, true, 1, ' km')}${row('Orders within ' + c.dMax + ' km', b.within, a.within, false, 1, '%')}</tbody></table></div>
+  ${histChart(sim.histBefore, sim.histAfter)}
+  <p class="note muted">Assumptions: distances are straight-line distance times ${c.circuity}. Customers outside a new lab's catchment, or not in the closed labs' order set, keep their current lab. Assured order share after upgrades assumes an Assured lab receives ${c.assuredUplift} times the orders it gets today, taken from the other Non-Assured labs. This is an estimate: replace the factor in Parameters once you know your routing weights.</p>`;
+};
+PANES.impactAfter = function () { };
+
+/* ---- parameters ---- */
+const PARAMS = [
+  ['Distance and period', [
+    ['circuity', 'Road circuity factor', '×', 0.01, 1, 3, 'Road km = straight-line km times this factor. 1.3 to 1.4 is typical for Indian metros.'],
+    ['dMax', 'Acceptable travel distance', 'km', 0.5, 1, 100, 'Customers with no lab within this road distance count as underserved.'],
+    ['dataMonths', 'Data covers', 'months', 0.5, 0.25, 60, 'Used for monthly rates only when the order file has no date column.']]],
+  ['New lab siting', [
+    ['gridKm', 'Candidate grid size', 'km', 0.5, 0.5, 10, 'Underserved orders are bucketed into cells of this size to find candidate spots.'],
+    ['catchKm', 'Catchment radius', 'km road', 0.5, 1, 30, 'A new lab can capture underserved customers within this road distance.'],
+    ['minSepKm', 'Minimum gap to any lab', 'km road', 0.5, 0, 20, 'Avoids placing a new lab on top of an existing one.'],
+    ['minViable', 'Minimum orders a month for a new lab', 'orders', 5, 1, 5000, 'A spot must capture at least this many orders a month.'],
+    ['minGainKm', 'Minimum distance saved per order', 'km', 0.25, 0, 30, 'Average road km saved for the customers a new lab captures.'],
+    ['maxNewSites', 'Maximum new labs to suggest', 'labs', 1, 1, 30, 'The greedy search stops after this many.'],
+    ['assuredTrackOrders', 'Assured-track demand level', 'orders/mo', 10, 1, 10000, 'A new lab is Assured-track if it has no Assured lab nearby, or demand at or above this.']]],
+  ['Upgrade to Assured', [
+    ['upBreachMax', 'Maximum TAT breach', '%', 0.5, 0, 100, 'Applied to the upper confidence bound of the breach rate.'],
+    ['upNpsMin', 'Minimum NPS', 'points', 1, -100, 100, 'Applied to the lower confidence bound of NPS.'],
+    ['upVolMin', 'Minimum orders a month', 'orders', 5, 0, 5000, 'Keep this low. Non-Assured labs get fewer orders by design.'],
+    ['upScoreMin', 'Minimum composite score', 'of 100', 1, 0, 100, 'Blend of percentile ranks, weights below.'],
+    ['nearMissTol', 'Near-miss tolerance', '%', 1, 0, 100, 'A lab that misses one gate by less than this share of the threshold is a near miss.'],
+    ['assuredCapPct', 'Maximum Assured share of labs', '%', 1, 0, 100, 'Upgrades beyond this cap go to a queue, best score first.']]],
+  ['Score weights', [
+    ['wTat', 'TAT breach', 'weight', 1, 0, 100, 'Lower breach scores higher.'], ['wNps', 'NPS', 'weight', 1, 0, 100, 'Higher NPS scores higher.'],
+    ['wVol', 'Order volume', 'weight', 1, 0, 100, 'More orders a month scores higher.'], ['wDist', 'Customer distance', 'weight', 1, 0, 100, 'Shorter average customer distance scores higher.']]],
+  ['Closure', [
+    ['clBreachMin', 'TAT breach at or above', '%', 0.5, 0, 100, 'Applied to the lower confidence bound, so noise cannot flag a lab.'],
+    ['clNpsMax', 'NPS at or below', 'points', 1, -100, 100, 'Applied to the upper confidence bound.'],
+    ['clVolMax', 'Orders a month below', 'orders', 5, 0, 5000, 'Only low-volume labs can be closed.'],
+    ['clMaxAddKm', 'Maximum extra travel', 'km', 0.25, 0, 30, 'Average extra road km for the closed lab’s customers.'],
+    ['clMaxPushedPct', 'Maximum orders pushed past limit', '%', 1, 0, 100, 'Share of its orders that would end up beyond the acceptable distance.'],
+    ['clUtilCap', 'Receiving lab capacity limit', '%', 5, 10, 300, 'Needs a capacity column in the lab file. Skipped when capacity is missing.']]],
+  ['Statistics and simulator', [
+    ['zConf', 'Confidence level', 'one-sided', 0, 0, 0, 'Higher confidence demands stronger evidence from small samples.', [[0.8416, '80%'], [1.2816, '90%'], [1.6449, '95%'], [2.3263, '99%']]],
+    ['npsRespRate', 'NPS response rate', '%', 1, 1, 100, 'Used when the lab file has no NPS response count: responses = orders times this rate.'],
+    ['assuredUplift', 'Assured order uplift', '×', 0.1, 1, 10, 'Used only in the Impact tab estimate of orders on Assured labs.']]]
+];
+PANES.params = function () {
+  const c = S.cfg, d = E.DEFAULTS;
+  return '<p class="note">Everything the analysis decides is driven by these numbers. Changes apply as you type and are remembered in this browser. Exported analyses keep their own copy.</p>' +
+    PARAMS.map(g => `<div class="pgroup"><h3>${g[0]}</h3><div class="pgrid">${g[1].map(p => {
+      const [k, label, unit, step, mn, mx, help, opts] = p, chg = c[k] !== d[k];
+      const ctl = opts ? `<select id="p_${k}" data-p="${k}">${opts.map(o => `<option value="${o[0]}" ${Math.abs(o[0] - c[k]) < 1e-6 ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>` : `<input id="p_${k}" data-p="${k}" type="number" step="${step}" min="${mn}" max="${mx}" value="${c[k]}" inputmode="decimal">`;
+      return `<div class="param${chg ? ' chg' : ''}" id="pp_${k}"><label for="p_${k}">${label}</label><div class="ig">${ctl}<span class="u">${unit}</span></div><span class="h">${help}</span></div>`;
+    }).join('')}</div>${g[0] === 'Score weights' ? '<p class="note muted" id="wNote"></p>' : ''}</div>`).join('') +
+    '<div><button class="btn" type="button" data-act="resetParams">Reset all parameters to defaults</button></div>';
+};
+PANES.paramsAfter = function () { weightNote(); };
+function weightNote() {
+  const el = $('wNote'); if (!el) return; const c = S.cfg, t = (c.wTat + c.wNps + c.wVol + c.wDist) || 1;
+  el.textContent = `Weights are normalised to 100%: TAT ${nf(100 * c.wTat / t)}%, NPS ${nf(100 * c.wNps / t)}%, volume ${nf(100 * c.wVol / t)}%, distance ${nf(100 * c.wDist / t)}%.`;
+}
+
+/* ---- method ---- */
+PANES.method = function () {
+  const c = S.cfg;
+  return `<div class="method" style="display:flex;flex-direction:column;gap:10px">
+  <h3>How the numbers are made</h3>
+  <p>Everything runs in your browser on the files you load. The map has no street tiles because the page cannot fetch them. Positions are exact and use a Mercator plot with a scale bar.</p>
+  <h3>1. Distance</h3>
+  <p>For each order, the straight-line (haversine) distance to its lab is multiplied by the circuity factor (now ${c.circuity}) to estimate road distance. The network is summarised by average, median, 90th percentile and the share of orders within ${c.dMax} km. For each customer the nearest lab is also found, which separates a coverage gap (no lab near) from a routing choice (a lab is near but the order went elsewhere).</p>
+  <div class="formula">road km = haversine(customer, lab) x circuity</div>
+  <h3>2. Where a new lab is needed</h3>
+  <ol><li>Underserved orders are those whose nearest lab of any type is further than ${c.dMax} km by road.</li>
+  <li>They are bucketed into a ${c.gridKm} km grid per city. Each occupied cell is a candidate at the centroid of its orders.</li>
+  <li>For a candidate, the captured orders are the underserved orders within ${c.catchKm} km by road that would be closer than today. Distance saved is the sum of (current nearest distance minus new distance).</li>
+  <li>The candidate with the largest saving is chosen if it passes the tests: at least ${c.minViable} orders a month, at least ${c.minGainKm} km saved per order, and at least ${c.minSepKm} km from any lab. Its position is then pulled to the centroid of its customers.</li>
+  <li>Its orders are removed and the search repeats, up to ${c.maxNewSites} times. This is the standard greedy method for maximum coverage and gives a result within a known bound of the best possible.</li></ol>
+  <p>Type: Assured-track when no Assured lab is within ${c.catchKm} km or demand reaches ${c.assuredTrackOrders} orders a month, otherwise Non-Assured on probation.</p>
+  <h3>3. Which labs become Assured</h3>
+  <p>TAT breach and NPS come from small samples, so they are judged on confidence bounds, not point values.</p>
+  <div class="formula">TAT breach: Wilson upper bound of the observed rate, n = orders behind the rate
+NPS: lower bound = NPS - z x sqrt((1 - (NPS/100)^2) / n) x 100, n = NPS responses</div>
+  <p>A lab passes when the breach bound is at most ${c.upBreachMax}%, the NPS bound is at least ${c.upNpsMin}, volume is at least ${c.upVolMin} orders a month and the composite score is at least ${c.upScoreMin}. The score is a weighted blend of four percentile ranks inside the labs in view: low TAT breach, high NPS, high volume and short average customer distance. Labs are upgraded best score first up to the Assured cap, then queued.</p>
+  <h3>4. Which labs close</h3>
+  <p>Closure needs weak performance, low volume and a safe move, all together. Weak means the breach lower bound is at or above ${c.clBreachMin}% or the NPS upper bound is at or below ${c.clNpsMax}. Candidates are tested weakest first. For each, every customer is reassigned to the nearest remaining lab, and the lab closes only if average extra distance is at most ${c.clMaxAddKm} km, at most ${c.clMaxPushedPct}% of its orders cross the ${c.dMax} km limit, and no receiving lab goes above ${c.clUtilCap}% of its capacity. An accepted closure changes the network used for the next test, so closures cannot pile onto the same neighbour.</p>
+  <h3>5. Filters</h3>
+  <p>City, PIN code and date filters set the customers in view. Lab volumes always use every order in the date range, so a lab in a quiet PIN code is not judged on a sliver of its orders. Monthly rates divide by the length of the date range.</p>
+  <h3>What the model does not know</h3>
+  <ul><li>Which modalities a lab offers (X-ray, ultrasound, CT, MRI). A lab is assumed to serve every order.</li><li>Real road or traffic time. Replace the circuity factor when you have routed distances.</li><li>The ordering page's actual routing weights. The Assured uplift is an assumption you can change.</li><li>Cost to open or run a lab. Viability is a single orders-a-month threshold.</li></ul></div>`;
+};
+
+/* ---------- data tab: upload, templates, sample ---------- */
+function datasetFromTables(oTbl, lTbl, label) {
+  const om = E.detectMapping(oTbl.headers, E.ORDER_SCHEMA), lm = E.detectMapping(lTbl.headers, E.LAB_SCHEMA);
+  const ord = E.parseOrders(oTbl, om), pl = E.parseLabs(lTbl, lm, ord.cities, ord.pins);
+  const D = E.assemble(ord, pl.labs, { label }); D.cities = ord.cities; D.pins = ord.pins; E.finalize(D); D.warn = ord.warn.concat(pl.warn); return D;
+}
+function loadSample() {
+  const g = Dm.generate(2026, 6), D = datasetFromTables({ headers: g.orders.headers, rows: g.orders.rows.map(r => r.map(String)) }, { headers: g.labs.headers, rows: g.labs.rows.map(r => r.map(String)) }, 'Sample data (Delhi NCR)');
+  D.sample = true; setDataset(D);
+}
+function ordFromD(D) { return { n: D.n, lat: D.lat, lng: D.lng, labKey: D.labKey, city: D.city, pin: D.pin, day: D.day, w: D.w, cities: D.cities.slice(), pins: D.pins.slice(), labKeyList: D.labKeyList, hasDate: D.hasDate, warn: [] }; }
+function labsToTable(labs) {
+  const keys = E.LAB_SCHEMA.map(f => f.key);
+  return { tbl: { headers: keys, rows: labs.map(l => [l.id, l.name, l.lat, l.lng, l.city, l.pin, l.breach, l.nps, l.status === 'A' ? 'Assured' : 'Non-Assured', l.npsN == null ? '' : l.npsN, l.tatN == null ? '' : l.tatN, l.cap == null ? '' : l.cap]) }, map: Object.fromEntries(keys.map((k, i) => [k, i])) };
+}
+async function readFile(kind, file) {
+  busy('Reading ' + file.name); await nextFrame();
+  try {
+    const text = await file.text(); const tbl = E.parseCSV(text); const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
+    if (!tbl.headers.length || !tbl.rows.length) throw new Error('The file has no data rows.');
+    S.up[kind] = { name: file.name, tbl, map: E.detectMapping(tbl.headers, schema) }; S.upMsg = null;
+  } catch (e) { S.up[kind] = null; S.upMsg = { t: 'err', h: 'Could not read ' + esc(file.name) + ': ' + esc(e.message || e) }; }
+  busy(''); renderPane('force');
+}
+function missingFields(kind) {
+  const u = S.up[kind]; if (!u) return []; const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
+  return schema.filter(f => f.required && (u.map[f.key] == null || u.map[f.key] < 0)).map(f => f.label);
+}
+async function applyUploads() {
+  const U = S.up; if (!U.orders && !U.labs) return;
+  const miss = missingFields('orders').concat(missingFields('labs'));
+  if (miss.length) { S.upMsg = { t: 'err', h: 'Map these required columns first: ' + esc(miss.join(', ')) + '.' }; renderPane('force'); return; }
+  busy('Analysing your data'); await nextFrame();
+  try {
+    const D0 = S.D; let ord, pl, lblParts = [];
+    if (U.orders) { ord = E.parseOrders(U.orders.tbl, U.orders.map); lblParts.push(U.orders.name); } else ord = ordFromD(D0);
+    if (!ord.n && U.orders) throw new Error('No valid order rows. Check the latitude, longitude and lab ID columns.');
+    if (U.labs) { pl = E.parseLabs(U.labs.tbl, U.labs.map, ord.cities, ord.pins); lblParts.push(U.labs.name); }
+    else { const lt = labsToTable(D0.labs); pl = E.parseLabs(lt.tbl, lt.map, ord.cities, ord.pins); }
+    if (!pl.labs.length) throw new Error('No valid lab rows. Check lab ID, coordinates, TAT breach, NPS and status.');
+    const D = E.assemble(ord, pl.labs, { label: 'Uploaded: ' + lblParts.join(' + ') }); D.cities = ord.cities; D.pins = ord.pins; E.finalize(D); D.warn = (ord.warn || []).concat(pl.warn);
+    if (!D.totalOrders && D.n && !D.warnLink.length) D.warnLink = [];
+    S.up = { orders: null, labs: null }; setDataset(D);
+    const matched = D.n - 0; S.upMsg = { t: 'ok', h: 'Loaded ' + nf(D.n) + ' order rows and ' + D.labs.length + ' labs.' };
+    busy(''); renderPane('force');
+  } catch (e) { busy(''); S.upMsg = { t: 'err', h: esc(e.message || e) }; renderPane('force'); }
+}
+PANES.data = function () {
+  const D = S.D, U = S.up;
+  const warns = (D.warn || []).concat(D.warnLink || []);
+  const mapUI = kind => {
+    const u = U[kind]; if (!u) return ''; const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
+    return `<div class="alert ok">Read <b>${esc(u.name)}</b>: ${nf(u.tbl.rows.length)} rows, ${u.tbl.headers.length} columns. Check the column mapping.</div><div class="mapgrid">` + schema.map(f => `<div><label for="m_${kind}_${f.key}">${esc(f.label)}${f.required ? ' *' : ''}</label><select id="m_${kind}_${f.key}" data-map="${kind}:${f.key}"><option value="-1">(not in file)</option>${u.tbl.headers.map((h, i) => `<option value="${i}" ${u.map[f.key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`).join('') + '</div>';
+  };
+  const hasUp = U.orders || U.labs;
+  return `${S.upMsg ? `<div class="alert ${S.upMsg.t}">${S.upMsg.h}</div>` : ''}
+  <div class="alert ${D.sample ? 'warn' : 'ok'}"><b>${esc(D.label)}</b>: ${nf(D.totalOrders)} orders, ${D.labs.length} labs, ${D.cities.filter((c, i) => S.cityOrders[i] > 0).length} cities, ${D.pins.filter((p, i) => S.pinOrders[i] > 0).length} PIN codes${D.hasDate ? ', ' + E.dayToISO(D.dayMin) + ' to ' + E.dayToISO(D.dayMax) : ', no order dates'}.${D.sample ? ' This is generated sample data for Delhi NCR, so the numbers are illustrative.' : ''}
+  ${warns.length ? '<ul>' + warns.map(w => `<li>${esc(w)}</li>`).join('') + '</ul>' : ''}</div>
+  <p class="note">Upload fresh files to replace the data. You can replace just one file: orders are matched to labs by lab ID. Files must be CSV. Data stays in your browser unless you save a model.</p>
+  <div class="drop" data-drop="orders"><h3>Order file <small>one row per order</small></h3>
+    <p class="note muted">Needs order ID, latitude, longitude and lab ID. City, order date and PIN code switch on the filters. Order IDs are never stored.</p>
+    <input type="file" id="fOrders" accept=".csv,.tsv,.txt,text/csv" data-file="orders" aria-label="Order file">${mapUI('orders')}</div>
+  <div class="drop" data-drop="labs"><h3>Lab file <small>one row per lab</small></h3>
+    <p class="note muted">Needs lab ID, name, latitude, longitude, TAT breach %, NPS and an Assured or Non-Assured status. City and PIN code help the filters. Optional: NPS responses, orders behind the TAT rate, and capacity per month.</p>
+    <input type="file" id="fLabs" accept=".csv,.tsv,.txt,text/csv" data-file="labs" aria-label="Lab file">${mapUI('labs')}</div>
+  <div class="sumrow"><button class="btn primary" type="button" data-act="applyUp" ${hasUp ? '' : 'disabled'}>Load and analyse</button>
+  <button class="btn" type="button" data-act="tplOrders">Download order template</button><button class="btn" type="button" data-act="tplLabs">Download lab template</button><button class="btn" type="button" data-act="loadSample">Use sample data</button></div>`;
+};
+function wireDrops() {
+  const pane = $('pane');
+  pane.addEventListener('change', e => {
+    const t = e.target;
+    if (t.dataset.file && t.files[0]) readFile(t.dataset.file, t.files[0]);
+    if (t.dataset.map) { const [kind, key] = t.dataset.map.split(':'); if (S.up[kind]) S.up[kind].map[key] = +t.value; }
+  });
+  ['dragover', 'dragleave', 'drop'].forEach(ev => pane.addEventListener(ev, e => {
+    const z = e.target.closest('.drop'); if (!z) return; e.preventDefault();
+    if (ev === 'dragover') z.classList.add('over'); else z.classList.remove('over');
+    if (ev === 'drop' && e.dataTransfer.files[0]) readFile(z.dataset.drop, e.dataTransfer.files[0]);
+  }));
+}
+async function downloadTemplate(kind) {
+  const g = Dm.generate(7, 6);
+  const t = kind === 'orders' ? E.toCSV(g.orders.headers, g.orders.rows.slice(0, 15)) : E.toCSV(g.labs.headers, g.labs.rows.slice(0, 8));
+  saveFile(kind === 'orders' ? 'orders_template.csv' : 'labs_template.csv', t);
+}
+
+/* ---------- exports ---------- */
+function exportSites() {
+  const r = S.res; saveFile(csvName('new_lab_sites'), E.toCSV(['rank', 'city', 'pin', 'lat', 'lng', 'orders_per_month', 'avg_km_now', 'avg_km_after', 'pct_change', 'nearest_lab_km', 'nearest_assured_km', 'type', 'reason'],
+    r.sites.map(s => [s.rank, s.city, s.pin, s.lat.toFixed(5), s.lng.toFixed(5), s.pm.toFixed(0), s.before.toFixed(2), s.after.toFixed(2), (-s.gainPct).toFixed(1), s.nearestLab.toFixed(2), s.nearestAssured == null ? '' : s.nearestAssured.toFixed(2), s.type, s.why])));
+}
+function exportUp() {
+  const r = S.res; saveFile(csvName('upgrade_decisions'), E.toCSV(['lab_id', 'lab_name', 'city', 'pin', 'orders_per_month', 'tat_breach_pct', 'tat_breach_upper_pct', 'nps', 'nps_lower', 'score', 'decision', 'reason'],
+    r.scope.filter(l => l.status === 'N').map(l => [l.id, l.name, l.city, l.pin, l.pm.toFixed(0), l.breach, l.breachHi.toFixed(1), l.nps, l.npsLo.toFixed(0), l.score.toFixed(0), l.up.bucket, l.up.why])));
+}
+function exportCl() {
+  const r = S.res; saveFile(csvName('closure_decisions'), E.toCSV(['lab_id', 'lab_name', 'status', 'city', 'pin', 'orders_per_month', 'tat_breach_pct', 'nps', 'extra_km_if_closed', 'pct_pushed_beyond_limit', 'decision', 'reason'],
+    r.scope.map(l => [l.id, l.name, l.status === 'A' ? 'Assured' : 'Non-Assured', l.city, l.pin, l.pm.toFixed(0), l.breach, l.nps, l.cl.tests ? l.cl.tests.addKm.toFixed(2) : '', l.cl.tests ? l.cl.tests.pushed.toFixed(1) : '', l.cl.bucket, l.cl.why])));
+}
+
+/* ---------- pane events ---------- */
+function wirePane() {
+  const pane = $('pane');
+  pane.addEventListener('click', e => {
+    const t = e.target;
+    const lab = t.closest('[data-lab]'); if (lab) { selectItem('lab', +lab.dataset.lab, true); return; }
+    const row = t.closest('[data-sel]'); if (row) { const [ty, ix] = row.dataset.sel.split(':'); selectItem(ty, +ix, true); return; }
+    const pt = t.closest('[data-pt]'); if (pt) { const [la, lo] = pt.dataset.pt.split(',').map(Number); MapView.focusPoint(la, lo); return; }
+    const uf = t.closest('[data-upf]'); if (uf) { S.upFilter[uf.dataset.upf] = !S.upFilter[uf.dataset.upf]; renderPane('force'); return; }
+    const cf = t.closest('[data-clf]'); if (cf) { S.clFilter[cf.dataset.clf] = !S.clFilter[cf.dataset.clf]; renderPane('force'); return; }
+    const a = t.closest('[data-act]'); if (!a) return; const act = a.dataset.act;
+    if (act === 'exportSites') exportSites(); else if (act === 'exportUp') exportUp(); else if (act === 'exportCl') exportCl();
+    else if (act === 'resetParams') { S.cfg = Object.assign({}, E.DEFAULTS); saveCfg(); renderPane('force'); schedule(20); }
+    else if (act === 'applyUp') applyUploads(); else if (act === 'loadSample') { busy('Preparing sample data'); setTimeout(() => { loadSample(); S.upMsg = null; busy(''); renderPane('force'); }, 30); }
+    else if (act === 'tplOrders') downloadTemplate('orders'); else if (act === 'tplLabs') downloadTemplate('labs');
+  });
+  pane.addEventListener('change', e => { const t = e.target; if (t.dataset.sim) { S.sim[t.dataset.sim] = t.checked; S.sim.cache = null; renderPane('force'); } });
+  pane.addEventListener('input', e => {
+    const t = e.target, k = t.dataset.p; if (!k) return;
+    const def = PARAMS.flatMap(g => g[1]).find(p => p[0] === k); let v = parseFloat(t.value);
+    if (!isFinite(v)) return; if (def && def[3] !== 0 && (v < def[4] || v > def[5])) return;
+    S.cfg[k] = v; saveCfg(); const box = $('pp_' + k); if (box) box.classList.toggle('chg', v !== E.DEFAULTS[k]); weightNote(); schedule(260);
+  });
+  pane.addEventListener('mouseover', e => { const t = e.target.closest('[data-tip]'); if (t) { const b = t.getBoundingClientRect(); showTip(t.dataset.tip, b.left + b.width / 2, b.top); } });
+  pane.addEventListener('mousemove', e => { const t = e.target.closest('[data-tip]'); if (t) showTip(t.dataset.tip, e.clientX, e.clientY); else hideTip(); });
+  pane.addEventListener('mouseleave', hideTip);
+  $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) { hideTip(); S.tab = b.dataset.tab; renderTabs(); renderPane('force'); } });
+}
+
+/* ---------- published analyses (static files on the host, read-only for members) ---------- */
+const modal = { open: null };
+function openModal(html) { $('mcard').innerHTML = html; $('modal').hidden = false; }
+function closeModal() { $('modal').hidden = true; modal.open = null; }
+const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
+S.models = []; S.indexState = 'loading'; S.pending = null;
+
+function packLabs(D, restrict, anon) {
+  let cities = D.cities, pins = D.pins, labs = D.labs.map(l => Object.assign({}, l));
+  if (restrict) {
+    cities = []; pins = []; const ci = new Map(), pi = new Map();
+    labs.forEach(l => { if (!ci.has(l.city)) { ci.set(l.city, cities.length); cities.push(l.city); } l.cityIdx = ci.get(l.city); if (l.pin) { if (!pi.has(l.pin)) { pi.set(l.pin, pins.length); pins.push(l.pin); } l.pinIdx = pi.get(l.pin); } else l.pinIdx = -1; });
+  }
+  return { cities, pins, labs: labs.map((l, i) => ({ id: anon ? 'LAB' + String(i + 1).padStart(2, '0') : l.id, name: anon ? 'Lab ' + String(i + 1).padStart(2, '0') : l.name, lat: l.lat, lng: l.lng, c: l.cityIdx, p: l.pinIdx, s: l.status, b: l.breach, n: l.nps, nn: l.npsN, tn: l.tatN, cp: l.cap })) };
+}
+const slug = t => (t || 'analysis').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'analysis';
+
+function openExportModal() {
+  const d = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  openModal(`<h2>Export analysis</h2>
+  <p class="note">Downloads this analysis as a file: your parameters, filters and lab list. Anyone can open it later with Published analyses, then Open from file. To make it visible to every member, publish it (steps below).</p>
+  <div class="field"><label for="mName">Analysis name</label><input class="input" id="mName" style="width:100%" maxlength="80" value="Network review ${esc(d)}"></div>
+  <label class="radio"><input type="radio" name="mMode" value="full" checked><div><b>Include orders, generalised</b><span>Order IDs are dropped, locations are rounded to about 100 m and dates to the week.</span></div></label>
+  <label class="radio"><input type="radio" name="mMode" value="light"><div><b>Settings and labs only</b><span>No customer locations are included. Whoever opens it uploads their own order file.</span></div></label>
+  <label class="radio"><input type="checkbox" id="mAnon"><div><b>Anonymise lab names</b><span>Labs appear as Lab 01, Lab 02 and so on, and lab IDs are replaced. Their locations, TAT and NPS stay.</span></div></label>
+  <div class="note"><b>To publish for all members:</b> export, then add the downloaded <code>models/&lt;name&gt;.json</code> and the updated <code>models/index.json</code> to the <code>models</code> folder of your GitHub repository. The app lists it within a minute of the commit.</div>
+  <div id="mStatus" class="note muted"></div>
+  <div class="acts"><button class="btn" type="button" data-act="closeModal">Cancel</button><button class="btn primary" type="button" data-act="doExport" id="mGo">Export</button></div>`);
+  modal.open = 'export';
+}
+async function doExport() {
+  const name = ($('mName').value || '').trim() || 'Untitled analysis', mode = document.querySelector('input[name=mMode]:checked').value, anon = $('mAnon').checked, st = $('mStatus'), go = $('mGo'); go.disabled = true;
+  const D = S.D;
+  try {
+    st.textContent = 'Preparing'; await nextFrame();
+    const pk = packLabs(D, mode === 'light', anon); let rows = '';
+    if (mode === 'full') {
+      const m = new Map();
+      for (let i = 0; i < D.n; i++) { const lj = D.lab[i]; if (lj < 0) continue; const wk = D.day[i] >= 0 ? Math.floor(D.day[i] / 7) : -1; const k = Math.round(D.lat[i] * 1000) + ',' + Math.round(D.lng[i] * 1000) + ',' + lj + ',' + D.pin[i] + ',' + D.city[i] + ',' + wk; m.set(k, (m.get(k) || 0) + D.w[i]); }
+      rows = [...m.entries()].map(([k, w]) => k + ',' + w).join(';');
+    }
+    const F = S.F, nm = D.cities, at = new Date().toISOString(), id = slug(name) + '-' + at.slice(0, 10);
+    const meta = { name, at, mode, anon, nOrders: Math.round(D.totalOrders || 0), nLabs: D.labs.length, label: anon ? 'Anonymised' : D.label, sample: !!D.sample, cfg: Object.assign({}, S.cfg),
+      cities: F.cities ? [...F.cities].map(i => nm[i]) : [], pins: F.pins ? [...F.pins].map(i => D.pins[i]) : [], dayFrom: F.dayFrom == null ? -1 : F.dayFrom, dayTo: F.dayTo == null ? -1 : F.dayTo };
+    const file = { v: 1, meta, labs: { cities: pk.cities, pins: pk.pins, labs: pk.labs, hasDate: !!D.hasDate }, rows };
+    await saveFile(id + '.json', JSON.stringify(file));
+    const entry = { id, file: id + '.json', name, at, mode, anon, nOrders: meta.nOrders, nLabs: meta.nLabs, sample: meta.sample };
+    if (S.indexState === 'ok') {
+      const list = S.models.filter(m => m.id !== id).map(m => ({ id: m.id, file: m.file, name: m.name, at: m.at, mode: m.mode, anon: !!m.anon, nOrders: m.nOrders, nLabs: m.nLabs, sample: !!m.sample })); list.unshift(entry);
+      setTimeout(() => saveFile('index.json', JSON.stringify({ models: list }, null, 1)), 500);
+      st.innerHTML = 'Downloaded <b>' + esc(id) + '.json</b> and an updated <b>index.json</b>. If your browser asks, allow multiple downloads. Upload both to the <code>models</code> folder of the repository to publish.';
+    } else {
+      st.innerHTML = 'Downloaded <b>' + esc(id) + '.json</b>. The published list could not be read from this host, so no new index.json was made. To publish, add this entry to <code>models/index.json</code>: <code>' + esc(JSON.stringify(entry)) + '</code>';
+    }
+    go.textContent = 'Export again'; go.disabled = false;
+  } catch (e) { go.disabled = false; st.innerHTML = '<span style="color:var(--crit-ink)">Could not export: ' + esc((e && e.message) || 'unknown error') + '</span>'; }
+}
+
+function openModelsModal() { modal.open = 'models'; renderModels(); loadIndex(true); }
+function renderModels() {
+  if (modal.open !== 'models') return;
+  const rows = S.models.map(m => `<div class="mrow"><div class="meta"><b>${esc(m.name)}</b><span>${esc(fmtDate(m.at))} · ${nf(m.nOrders)} orders, ${m.nLabs} labs · ${m.mode === 'full' ? 'with orders' : 'labs and settings only'}${m.anon ? ' · lab names anonymised' : ''}${m.sample ? ' · sample data' : ''}</span></div>
+    <div class="sumrow"><button class="btn sm primary" type="button" data-act="openModel" data-id="${esc(m.id)}">Open</button></div></div>`).join('');
+  let empty = '';
+  if (!S.models.length) empty = S.indexState === 'loading' ? '<div class="empty">Loading</div>' : S.indexState === 'ok' ? '<div class="empty">Nothing has been published yet. Analyses published by the owner appear here.</div>' : '<div class="empty">The published list is not available here. It loads when the app is opened from its hosted link, not from a downloaded file. You can still open an exported analysis file below.</div>';
+  openModal(`<h2>Published analyses</h2><p class="note">Analyses published by the owner of this app. Opening one replaces your current data, parameters and filters. Your own uploads stay on your device.</p>${rows || empty}
+  <div class="note muted">Have an exported analysis file? <button class="btn sm" type="button" data-act="pickFile">Open from file</button><input type="file" id="mFile" accept=".json,application/json" hidden></div>
+  <div id="mStatus" class="note muted"></div><div class="acts"><button class="btn" type="button" data-act="closeModal">Close</button></div>`);
+}
+async function loadIndex(force) {
+  if (!force && S.indexState !== 'loading') return;
+  try {
+    const r = await fetch('models/index.json?t=' + Date.now(), { cache: 'no-store' });
+    if (r.status === 404) { S.models = []; S.indexState = 'ok'; }
+    else if (!r.ok) throw new Error('status ' + r.status);
+    else { const j = await r.json(); S.models = (j.models || []).slice().sort((a, b) => (a.at < b.at ? 1 : -1)); S.indexState = 'ok'; }
+  } catch (e) { S.models = []; S.indexState = 'fail'; }
+  if (modal.open === 'models') renderModels();
+}
+async function loadModelObj(obj, closeAfter) {
+  const meta = obj && obj.meta, lab = obj && obj.labs;
+  if (!obj || obj.v !== 1 || !meta || !lab || !Array.isArray(lab.labs)) throw new Error('This is not a valid analysis file.');
+  const labs = lab.labs.map(l => ({ id: l.id, name: l.name, lat: l.lat, lng: l.lng, cityIdx: l.c, city: lab.cities[l.c], pinIdx: l.p, pin: l.p >= 0 ? lab.pins[l.p] : '', status: l.s, breach: l.b, nps: l.n, npsN: l.nn, tatN: l.tn, cap: l.cp }));
+  const arr = []; if (meta.mode === 'full' && obj.rows) for (const e of obj.rows.split(';')) arr.push(e.split(',').map(Number));
+  const n = arr.length;
+  const lat = new Float64Array(n), lng = new Float64Array(n), labKey = new Int32Array(n), city = new Int16Array(n), pin = new Int32Array(n), day = new Int32Array(n), w = new Float32Array(n); let anyDate = false;
+  arr.forEach((a, i) => { lat[i] = a[0] / 1000; lng[i] = a[1] / 1000; labKey[i] = a[2]; pin[i] = a[3]; city[i] = a[4]; if (a[5] >= 0) { day[i] = a[5] * 7 + 3; anyDate = true; } else day[i] = -1; w[i] = a[6]; });
+  const D = E.assemble({ n, lat, lng, labKey, city, pin, day, w, cities: lab.cities.slice(), pins: lab.pins.slice(), labKeyList: labs.map(l => l.id), hasDate: anyDate, warn: [] }, labs, { label: 'Analysis: ' + meta.name });
+  E.finalize(D); D.sample = !!meta.sample;
+  S.cfg = Object.assign({}, E.DEFAULTS, meta.cfg || {}); saveCfg();
+  setDataset(D);
+  const F = { cities: null, pins: null, dayFrom: D.hasDate ? D.dayMin : null, dayTo: D.hasDate ? D.dayMax : null };
+  if (meta.cities && meta.cities.length) { const s = new Set(meta.cities.map(nm => D.cities.indexOf(nm)).filter(i => i >= 0)); if (s.size) F.cities = s; }
+  if (meta.pins && meta.pins.length) { const s = new Set(meta.pins.map(p => D.pins.indexOf(p)).filter(i => i >= 0)); if (s.size) F.pins = s; }
+  if (D.hasDate && meta.dayFrom >= 0) { F.dayFrom = Math.max(D.dayMin, meta.dayFrom); F.dayTo = Math.min(D.dayMax, meta.dayTo); }
+  S.F = F; buildFilters(); S.refit = true; schedule(0);
+  busy(''); closeModal();
+  if (meta.mode !== 'full') { S.tab = 'data'; S.upMsg = { t: 'ok', h: 'Labs and settings loaded from "' + esc(meta.name) + '". Upload an order file to analyse.' }; renderTabs(); renderPane('force'); }
+  else { S.paneTab = null; renderPane('force'); }
+  toast('Opened "' + meta.name + '"');
+}
+async function openPublished(id) {
+  const m = S.models.find(x => x.id === id), st = $('mStatus'); if (!m) return;
+  try {
+    if (st) st.textContent = 'Opening'; busy('Opening analysis');
+    const r = await fetch('models/' + encodeURIComponent(m.file) + '?t=' + encodeURIComponent(m.at), { cache: 'no-store' });
+    if (!r.ok) throw new Error('The file could not be found (status ' + r.status + ').');
+    await loadModelObj(await r.json());
+  } catch (e) { busy(''); const s2 = $('mStatus'); if (s2) s2.innerHTML = '<span style="color:var(--crit-ink)">Could not open: ' + esc((e && e.message) || 'unknown error') + '</span>'; }
+}
+async function openFromFile(f) {
+  const st = $('mStatus');
+  try { busy('Opening analysis'); await loadModelObj(JSON.parse(await f.text())); }
+  catch (e) { busy(''); const s2 = $('mStatus'); if (s2) s2.innerHTML = '<span style="color:var(--crit-ink)">Could not open: ' + esc((e && e.message) || 'unknown error') + '</span>'; }
+}
+function wireModal() {
+  $('btnData').onclick = () => { S.tab = 'data'; renderTabs(); renderPane('force'); document.querySelector('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  $('btnModels').onclick = openModelsModal; $('btnSave').onclick = openExportModal;
+  $('modal').addEventListener('click', e => {
+    if (e.target === $('modal')) { closeModal(); return; }
+    const a = e.target.closest('[data-act]'); if (!a) return; const act = a.dataset.act;
+    if (act === 'closeModal') closeModal(); else if (act === 'doExport') doExport(); else if (act === 'openModel') openPublished(a.dataset.id); else if (act === 'pickFile') { const i = $('mFile'); if (i) i.click(); }
+  });
+  $('modal').addEventListener('change', e => { if (e.target.id === 'mFile' && e.target.files[0]) openFromFile(e.target.files[0]); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('modal').hidden) closeModal(); });
+}
+
+/* ---------- start ---------- */
+function start() {
+  wireFilters(); wirePane(); wireDrops(); wireModal(); renderMapTools(); renderLegend();
+  busy('Preparing sample data');
+  setTimeout(() => { loadSample(); busy(''); loadIndex(); }, 40);
+}
+start();
+
+})();
+</script>
+</body></html>
