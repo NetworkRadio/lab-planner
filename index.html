@@ -245,6 +245,15 @@ td .pm { color: var(--ink-3); font-size: 11px; display: block; white-space: norm
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 
+.askq { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; background: var(--surface); }
+.askq > b { display: block; margin-bottom: 2px; }
+ul.chk { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+ul.chk li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.chkall { margin: 10px 0; font-size: 12.5px; }
+.chkall summary { cursor: pointer; color: var(--ink-2); }
+.chkall .tablewrap { overflow-x: auto; margin-top: 8px; }
+.chkall td, .chkall th { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--line); }
+
 </style></head><body>
 <div class="app" id="app">
   <header class="top">
@@ -321,7 +330,7 @@ const DEFAULTS = {
   wTat: 40, wNps: 30, wVol: 15, wDist: 15,
   zConf: 1.2816, npsRespRate: 20,
   clBreachMin: 20, clNpsMax: 20, clVolMax: 80, clMaxAddKm: 2.5, clMaxPushedPct: 10, clUtilCap: 100,
-  assuredUplift: 1.8
+  assuredUplift: 1.8, maxCustKm: 50, defNps: 40, defTat: 30
 };
 
 /* ------------------------------------------------------------------- CSV */
@@ -356,7 +365,7 @@ const ORDER_SCHEMA = [
   { key: 'id', label: 'Order ID', required: false, syn: ['orderid', 'id', 'orderno', 'ordernumber', 'orderref'] },
   { key: 'lat', label: 'Customer latitude', required: true, syn: ['lat', 'latitude', 'customerlat', 'custlat', 'userlat', 'customerlatitude'] },
   { key: 'lng', label: 'Customer longitude', required: true, syn: ['lng', 'long', 'lon', 'longitude', 'customerlong', 'customerlng', 'custlng', 'customerlongitude'] },
-  { key: 'lab', label: 'Lab ID', required: true, syn: ['labid', 'lab', 'assignedlab', 'fulfilledby', 'labcode', 'assignedlabid'] },
+  { key: 'lab', label: 'Lab ID (asked if missing)', required: false, syn: ['labid', 'lab', 'assignedlab', 'fulfilledby', 'labcode', 'assignedlabid'] },
   { key: 'city', label: 'City', required: false, syn: ['city', 'customercity', 'ordercity'] },
   { key: 'date', label: 'Order date', required: false, syn: ['orderdate', 'date', 'bookingdate', 'createdat', 'slotdate', 'createddate', 'bookingdt'] },
   { key: 'pin', label: 'PIN code', required: false, syn: ['pin', 'pincode', 'postalcode', 'zip', 'zipcode', 'customerpin', 'customerpincode'] }
@@ -368,9 +377,9 @@ const LAB_SCHEMA = [
   { key: 'lng', label: 'Lab longitude', required: true, syn: ['lng', 'long', 'lon', 'longitude', 'lablong', 'lablng', 'lablongitude'] },
   { key: 'city', label: 'City', required: false, syn: ['city', 'labcity'] },
   { key: 'pin', label: 'PIN code', required: false, syn: ['pin', 'pincode', 'postalcode', 'zip', 'labpin', 'labpincode'] },
-  { key: 'breach', label: 'TAT breach %', required: true, syn: ['tatbreachpct', 'tatbreach', 'tatbreachpercent', 'breach', 'breachpct', 'tatbreachrate', 'tatbreachpercentage'] },
-  { key: 'nps', label: 'NPS', required: true, syn: ['nps', 'npsscore'] },
-  { key: 'status', label: 'Assured / Non-Assured', required: true, syn: ['status', 'labtype', 'assuredstatus', 'type', 'assured', 'labstatus', 'tag'] },
+  { key: 'breach', label: 'TAT breach % (default if missing)', required: false, syn: ['tatbreachpct', 'tatbreach', 'tatbreachpercent', 'breach', 'breachpct', 'tatbreachrate', 'tatbreachpercentage'] },
+  { key: 'nps', label: 'NPS (default if missing)', required: false, syn: ['nps', 'npsscore'] },
+  { key: 'status', label: 'Assured / Non-Assured (asked if missing)', required: false, syn: ['status', 'labtype', 'assuredstatus', 'type', 'assured', 'labstatus', 'tag'] },
   { key: 'npsN', label: 'NPS responses (optional)', required: false, syn: ['npsresponses', 'npsn', 'npscount', 'npssample', 'npsresponsecount'] },
   { key: 'tatN', label: 'Orders behind TAT % (optional)', required: false, syn: ['tatorders', 'tatn', 'tatsample', 'tatcount', 'ordersbehindtat'] },
   { key: 'cap', label: 'Capacity per month (optional)', required: false, syn: ['capacitypermonth', 'capacity', 'monthlycapacity', 'capacitymonth'] }
@@ -389,6 +398,7 @@ function detectMapping(headers, schema) {
 function parseDay(s) {
   if (s == null) return -1; s = String(s).trim(); if (!s) return -1;
   let y, m, d, mm;
+  if (/^\d{5}(\.\d+)?$/.test(s)) { const x = Math.floor(+s); return x > 30000 && x < 70000 ? x - 25569 : -1; }
   if ((mm = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/.exec(s))) { y = +mm[1]; m = +mm[2]; d = +mm[3]; }
   else if ((mm = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/.exec(s))) { d = +mm[1]; m = +mm[2]; y = +mm[3]; }
   else if ((mm = /^(\d{1,2})[-\s]([A-Za-z]{3})[a-z]*[-\s](\d{2,4})/.exec(s))) {
@@ -398,67 +408,6 @@ function parseDay(s) {
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 function dayToISO(day) { return new Date(day * 86400000).toISOString().slice(0, 10); }
-
-/* ----------------------------------------------------- orders / labs parse */
-function parseOrders(tbl, map) {
-  const rows = tbl.rows, n0 = rows.length;
-  const lat = new Float64Array(n0), lng = new Float64Array(n0), labKey = new Int32Array(n0), city = new Int16Array(n0),
-    pin = new Int32Array(n0), day = new Int32Array(n0).fill(-1), w = new Float32Array(n0).fill(1);
-  const cities = [], cityIdx = new Map(), pins = [], pinIdx = new Map(), labKeyList = [], labKeyIdx = new Map();
-  const warn = []; let n = 0, badCoord = 0, noLab = 0, badDate = 0, anyDate = false;
-  const gi = k => map[k];
-  for (let r = 0; r < n0; r++) {
-    const row = rows[r];
-    const la = parseFloat(row[gi('lat')]), lo = parseFloat(row[gi('lng')]);
-    if (!(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || (la === 0 && lo === 0)) { badCoord++; continue; }
-    const lk = String(row[gi('lab')] == null ? '' : row[gi('lab')]).trim();
-    if (!lk) { noLab++; continue; }
-    let ki = labKeyIdx.get(lk.toLowerCase()); if (ki === undefined) { ki = labKeyList.length; labKeyList.push(lk); labKeyIdx.set(lk.toLowerCase(), ki); }
-    let cn = gi('city') >= 0 ? String(row[gi('city')] || '').trim() : ''; if (!cn) cn = 'Unknown';
-    let ci = cityIdx.get(cn.toLowerCase()); if (ci === undefined) { ci = cities.length; cities.push(cn); cityIdx.set(cn.toLowerCase(), ci); }
-    let pn = gi('pin') >= 0 ? String(row[gi('pin')] || '').trim().replace(/\.0+$/, '') : ''; if (!pn) pn = '(no PIN)';
-    let pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); }
-    if (gi('date') >= 0) { const d = parseDay(row[gi('date')]); if (d < 0) badDate++; else { day[n] = d; anyDate = true; } }
-    lat[n] = la; lng[n] = lo; labKey[n] = ki; city[n] = ci; pin[n] = pi; n++;
-  }
-  if (badCoord) warn.push(badCoord.toLocaleString() + ' order rows skipped: latitude or longitude missing or invalid.');
-  if (noLab) warn.push(noLab.toLocaleString() + ' order rows skipped: lab ID empty.');
-  if (badDate) warn.push(badDate.toLocaleString() + ' order rows have an unreadable date and are excluded when a date range is applied.');
-  if (gi('date') < 0) warn.push('No order date column mapped. Date filter is off and the monthly rate uses "Data covers N months" from Parameters.');
-  const cut = a => a.slice(0, n);
-  return { n, lat: cut(lat), lng: cut(lng), labKey: cut(labKey), city: cut(city), pin: cut(pin), day: cut(day), w: cut(w), cities, pins, labKeyList, hasDate: anyDate, warn, rowsRead: n0 };
-}
-function parseStatus(v) {
-  const s = String(v == null ? '' : v).trim().toLowerCase();
-  if (!s) return null;
-  if (/^(non|not|un|n$|no|false|0)/.test(s) || s.includes('non')) return 'N';
-  if (s.includes('assured') || /^(a|yes|y|true|1)$/.test(s)) return 'A';
-  return null;
-}
-function parseLabs(tbl, map, cities, pins) {
-  const labs = [], warn = [], seen = new Set(); let skipped = 0, badStatus = 0, pctFrac = 0;
-  const gi = k => map[k], num = (row, k) => { if (gi(k) < 0) return NaN; const x = parseFloat(String(row[gi(k)]).replace('%', '')); return x; };
-  const cityIdx = new Map(cities.map((c, i) => [c.toLowerCase(), i])), pinIdx = new Map(pins.map((p, i) => [p, i]));
-  for (const row of tbl.rows) {
-    const id = String(row[gi('id')] == null ? '' : row[gi('id')]).trim();
-    const la = parseFloat(row[gi('lat')]), lo = parseFloat(row[gi('lng')]);
-    const br = num(row, 'breach'), np = num(row, 'nps'); const st = parseStatus(row[gi('status')]);
-    if (!id || seen.has(id.toLowerCase()) || !(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || !isFinite(br) || !isFinite(np)) { skipped++; continue; }
-    if (!st) { badStatus++; continue; }
-    seen.add(id.toLowerCase());
-    let cn = gi('city') >= 0 ? String(row[gi('city')] || '').trim() : ''; if (!cn) cn = 'Unknown';
-    let ci = cityIdx.get(cn.toLowerCase()); if (ci === undefined) { ci = cities.length; cities.push(cn); cityIdx.set(cn.toLowerCase(), ci); }
-    let pn = gi('pin') >= 0 ? String(row[gi('pin')] || '').trim().replace(/\.0+$/, '') : '';
-    let pi = -1; if (pn) { pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); } }
-    const nN = num(row, 'npsN'), tN = num(row, 'tatN'), cp = num(row, 'cap');
-    labs.push({ id, name: gi('name') >= 0 && row[gi('name')] ? String(row[gi('name')]).trim() : id, lat: la, lng: lo, cityIdx: ci, city: cities[ci], pinIdx: pi, pin: pn || '',
-      status: st, breach: br, nps: np, npsN: isFinite(nN) && nN > 0 ? nN : null, tatN: isFinite(tN) && tN > 0 ? tN : null, cap: isFinite(cp) && cp > 0 ? cp : null });
-  }
-  if (labs.length && labs.every(l => l.breach <= 1)) { labs.forEach(l => l.breach *= 100); pctFrac = 1; warn.push('TAT breach values were all between 0 and 1, so they were read as fractions and multiplied by 100.'); }
-  if (skipped) warn.push(skipped + ' lab rows skipped: missing or duplicate lab ID, bad coordinates, or TAT breach / NPS not numeric.');
-  if (badStatus) warn.push(badStatus + ' lab rows skipped: status not recognised. Use "Assured" or "Non-Assured".');
-  return { labs, warn };
-}
 
 /* -------------------------------------------------------------- assembly */
 function assemble(ord, labs, opts) {
@@ -487,8 +436,8 @@ function finalize(D) {
 function link(D) {
   const idMap = new Map(); D.labs.forEach((l, j) => idMap.set(String(l.id).trim().toLowerCase(), j));
   const map = D.labKeyList.map(k => { const v = idMap.get(String(k).trim().toLowerCase()); return v === undefined ? -1 : v; });
-  let miss = 0; const missKeys = new Set();
-  for (let i = 0; i < D.n; i++) { const j = map[D.labKey[i]]; D.lab[i] = j; if (j < 0) { miss += D.w[i]; if (missKeys.size < 8) missKeys.add(D.labKeyList[D.labKey[i]]); } }
+  let miss = 0; const missKeys = new Set(); const nearestOf = i => { const la = D.lat[i], lo = D.lng[i], c = Math.cos(la * RAD); let best = Infinity, bj = -1; for (let j = 0; j < D.labs.length; j++) { const dy = la - D.labs[j].lat, dx = (lo - D.labs[j].lng) * c, d2 = dx * dx + dy * dy; if (d2 < best) { best = d2; bj = j; } } return bj; };
+  for (let i = 0; i < D.n; i++) { let j = map[D.labKey[i]]; if (D.labs.length && (D.autoAll || (j < 0 && D.assignUnknown))) j = nearestOf(i); D.lab[i] = j; if (j < 0) { miss += D.w[i]; if (missKeys.size < 8) missKeys.add(D.labKeyList[D.labKey[i]]); } }
   D.unmatched = miss; D.unmatchedKeys = [...missKeys];
   D.warnLink = miss ? [Math.round(miss).toLocaleString() + ' orders reference a lab ID that is not in the lab file and are ignored (e.g. ' + [...missKeys].slice(0, 4).join(', ') + ').'] : [];
   prep(D);
@@ -538,6 +487,7 @@ function filterPoints(D, F, withGeo) {
   const out = []; const useDate = D.hasDate && F.dayFrom != null;
   for (let i = 0; i < D.n; i++) {
     if (D.lab[i] < 0) continue;
+    if (F.maxStraight != null && D.dA[i] > F.maxStraight) continue;
     if (useDate) { const d = D.day[i]; if (d < F.dayFrom || d > F.dayTo) continue; }
     if (withGeo) { if (F.cities && !F.cities.has(D.city[i])) continue; if (F.pins && !F.pins.has(D.pin[i])) continue; }
     out.push(i);
@@ -552,11 +502,14 @@ function periodMonths(D, F, cfg) {
 
 /* ---------------------------------------------------------------- analyze */
 function analyze(D, F, cfg) {
-  F = F || {}; cfg = Object.assign({}, DEFAULTS, cfg || {});
+  cfg = Object.assign({}, DEFAULTS, cfg || {});
+  const F0 = F || {}; F = Object.assign({}, F0, { maxStraight: cfg.maxCustKm > 0 ? cfg.maxCustKm / cfg.circuity : null });
   const circ = cfg.circuity, dMax = cfg.dMax, labs = D.labs, L = labs.length, n = D.n;
   const dateSel = filterPoints(D, F, false), sel = filterPoints(D, F, true);
+  const dateAll = filterPoints(D, Object.assign({}, F, { maxStraight: null }), false);
+  let wAll = 0, wKept = 0; for (const i of dateAll) wAll += D.w[i]; for (const i of dateSel) wKept += D.w[i];
   const months = periodMonths(D, F, cfg);
-  const res = { cfg, months, selIdx: sel, nSel: sel.length, nDate: dateSel.length };
+  const res = { cfg, months, selIdx: sel, nSel: sel.length, nDate: dateSel.length, farOut: Math.round(wAll - wKept) };
 
   /* --- lab level stats on every order in the date window (any geography) --- */
   const ord = new Float64Array(L), sumD = new Float64Array(L), farW = new Float64Array(L), vor = new Float64Array(L);
@@ -574,14 +527,16 @@ function analyze(D, F, cfg) {
     const p90 = lv[j].length ? wquantiles(lv[j], lw[j], [0.9])[0] : NaN;
     const nTat = l.tatN != null ? l.tatN : Math.max(D.labTotal[j], 1);
     const nNps = l.npsN != null ? l.npsN : Math.max(5, D.labTotal[j] * cfg.npsRespRate / 100);
-    const bw = wilson(l.breach / 100, nTat, cfg.zConf), nb = npsBounds(l.nps, nNps, cfg.zConf);
+    const brImp = l.breach == null, npImp = l.nps == null, bE = brImp ? cfg.defTat : l.breach, nE = npImp ? cfg.defNps : l.nps;
+    /* a default is a point value, not an estimate, so it gets no confidence band */
+    const bw = brImp ? [bE / 100, bE / 100] : wilson(bE / 100, nTat, cfg.zConf), nb = npImp ? [nE, nE] : npsBounds(nE, nNps, cfg.zConf);
     const pm = ord[j] / months;
     const cityOK = !F.cities || F.cities.has(l.cityIdx), pinOK = !F.pins || (l.pinIdx >= 0 && F.pins.has(l.pinIdx));
     const inScope = (cityOK && pinOK) || (selTotal > 0 && selOrd[j] >= 0.02 * selTotal);
     return {
       idx: j, id: l.id, name: l.name, city: l.city, pin: l.pin, lat: l.lat, lng: l.lng, status: l.status,
       orders: ord[j], pm, avgDist: ord[j] ? sumD[j] / ord[j] : NaN, p90, farShare: ord[j] ? farW[j] / ord[j] : 0, vorPm: vor[j] / months,
-      breach: l.breach, breachLo: bw[0] * 100, breachHi: bw[1] * 100, nps: l.nps, npsLo: nb[0], npsHi: nb[1], nTat, nNps,
+      breach: bE, breachImp: brImp, npsImp: npImp, breachLo: bw[0] * 100, breachHi: bw[1] * 100, nps: nE, npsLo: nb[0], npsHi: nb[1], nTat, nNps,
       cap: l.cap, util: l.cap ? pm / l.cap : null, inScope, selOrders: selOrd[j] / months
     };
   });
@@ -589,12 +544,12 @@ function analyze(D, F, cfg) {
   /* --- score (percentile blend inside scope) --- */
   const scope = rec.filter(r => r.inScope);
   const med = (() => { const v = scope.map(r => r.avgDist).filter(isFinite).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : 0; })();
-  const sB = pctRanks(scope.map(r => r.breach), false), sN = pctRanks(scope.map(r => r.nps), true),
+  const sB = pctRanks(scope.map(r => r.breach), false), sN = (() => { const have = scope.filter(r => r.nps != null), rk = pctRanks(have.map(r => r.nps), true); const m = new Map(have.map((r, k) => [r, rk[k]])); return scope.map(r => m.has(r) ? m.get(r) : null); })(),
     sV = pctRanks(scope.map(r => r.pm), true), sD = pctRanks(scope.map(r => isFinite(r.avgDist) ? r.avgDist : med), false);
-  const wsum = (cfg.wTat + cfg.wNps + cfg.wVol + cfg.wDist) || 1;
   scope.forEach((r, k) => {
+    const wN = sN[k] == null ? 0 : cfg.wNps, wsum = (cfg.wTat + wN + cfg.wVol + cfg.wDist) || 1;
     r.parts = { tat: sB[k], nps: sN[k], vol: sV[k], dist: sD[k] };
-    r.score = 100 * (cfg.wTat * sB[k] + cfg.wNps * sN[k] + cfg.wVol * sV[k] + cfg.wDist * sD[k]) / wsum;
+    r.score = 100 * (cfg.wTat * sB[k] + wN * (sN[k] || 0) + cfg.wVol * sV[k] + cfg.wDist * sD[k]) / wsum;
   });
   rec.forEach(r => { if (!r.inScope) { r.score = NaN; r.parts = null; } });
 
@@ -607,7 +562,7 @@ function analyze(D, F, cfg) {
     if (r.status === 'A') { r.up = { bucket: 'assured', why: 'Already Assured' }; continue; }
     const g = [
       { k: 'tat', ok: r.breachHi <= cfg.upBreachMax, gap: (r.breachHi - cfg.upBreachMax) / cfg.upBreachMax, text: 'TAT breach upper bound ' + r.breachHi.toFixed(1) + '% vs max ' + cfg.upBreachMax + '%' },
-      { k: 'nps', ok: r.npsLo >= cfg.upNpsMin, gap: (cfg.upNpsMin - r.npsLo) / Math.max(Math.abs(cfg.upNpsMin), 20), text: 'NPS lower bound ' + r.npsLo.toFixed(0) + ' vs min ' + cfg.upNpsMin },
+      { k: 'nps', ok: r.nps == null || r.npsLo >= cfg.upNpsMin, gap: r.nps == null ? 0 : (cfg.upNpsMin - r.npsLo) / Math.max(Math.abs(cfg.upNpsMin), 20), text: 'NPS lower bound ' + (r.nps == null ? 'n/a' : r.npsLo.toFixed(0)) + ' vs min ' + cfg.upNpsMin },
       { k: 'vol', ok: r.pm >= cfg.upVolMin, gap: (cfg.upVolMin - r.pm) / cfg.upVolMin, text: r.pm.toFixed(0) + ' orders/month vs min ' + cfg.upVolMin },
       { k: 'score', ok: r.score >= cfg.upScoreMin, gap: (cfg.upScoreMin - r.score) / cfg.upScoreMin, text: 'Composite score ' + r.score.toFixed(0) + ' vs min ' + cfg.upScoreMin }
     ];
@@ -619,7 +574,7 @@ function analyze(D, F, cfg) {
   }
   ups.sort((a, b) => b.score - a.score);
   ups.forEach((r, k) => {
-    if (k < slots) r.up.why = 'Passes every gate: breach upper bound ' + r.breachHi.toFixed(1) + '% (max ' + cfg.upBreachMax + '%), NPS lower bound ' + r.npsLo.toFixed(0) + ' (min ' + cfg.upNpsMin + '), ' + r.pm.toFixed(0) + ' orders a month (min ' + cfg.upVolMin + '), score ' + r.score.toFixed(0) + ' (min ' + cfg.upScoreMin + ').';
+    if (k < slots) r.up.why = 'Passes every gate: breach upper bound ' + r.breachHi.toFixed(1) + '% (max ' + cfg.upBreachMax + '%), ' + (r.nps == null ? 'no NPS data (test skipped)' : 'NPS lower bound ' + r.npsLo.toFixed(0) + ' (min ' + cfg.upNpsMin + ')') + ', ' + r.pm.toFixed(0) + ' orders a month (min ' + cfg.upVolMin + '), score ' + r.score.toFixed(0) + ' (min ' + cfg.upScoreMin + ').';
     else { r.up.bucket = 'queue'; r.up.why = 'Passes all gates, but the Assured cap of ' + cfg.assuredCapPct + '% of labs is reached. Next in line.'; }
   });
   for (const r of scope) {
@@ -639,7 +594,7 @@ function analyze(D, F, cfg) {
   const cand = [];
   for (const r of scope) {
     const lowVol = r.pm < cfg.clVolMax;
-    const badBreach = r.breachLo >= cfg.clBreachMin, badNps = r.npsHi <= cfg.clNpsMax;
+    const badBreach = !r.breachImp && r.breachLo >= cfg.clBreachMin, badNps = !r.npsImp && r.npsHi <= cfg.clNpsMax;
     const flagged = badBreach || badNps;
     const reasons = [];
     if (badBreach) reasons.push('TAT breach lower bound ' + r.breachLo.toFixed(1) + '% is at or above ' + cfg.clBreachMin + '%');
@@ -835,9 +790,365 @@ function simulate(D, res, opts) {
   };
 }
 
-const API = { DEFAULTS, hav, parseCSV, toCSV, ORDER_SCHEMA, LAB_SCHEMA, detectMapping, parseOrders, parseLabs, assemble, finalize, link, parseDay, dayToISO, analyze, simulate, filterPoints, wilson, npsBounds, wquantiles, periodMonths };
+const API = { DEFAULTS, hav, parseCSV, toCSV, ORDER_SCHEMA, LAB_SCHEMA, detectMapping, assemble, finalize, link, parseDay, dayToISO, analyze, simulate, filterPoints, wilson, npsBounds, wquantiles, periodMonths };
 if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Engine = API;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Lab Network Planner: data ingestion rules.
+   Every problem found in an uploaded file ends in exactly one of: drop the row, use a default,
+   fix it automatically, or ask the user with options. Nothing here throws at the user. */
+(function (root) {
+'use strict';
+const E = (typeof module !== 'undefined' && module.exports) ? require('./engine.js') : root.Engine;
+const RAD = Math.PI / 180;
+
+/* ------------------------------------------------------------- thresholds */
+const THRESH = {
+  unknownLabPct: 1, unknownLabMin: 50,   // ask when orders pointing to unknown labs reach 1% or 50 orders, else drop silently
+  dupOrderPct: 0.5,                      // ask when repeated order IDs reach 0.5% of rows
+  dateBadPct: 20,                        // ask when this share of order dates is unreadable
+  outlierKm: 150,                        // a lab this far from the other labs of its city is questioned
+  bigRows: 500000
+};
+
+/* --------------------------------------------------------- check catalogue */
+/* action: drop | default | fix | ask | info | stop. This list is the single source of truth: tests and CHECKS.md are built from it. */
+const CHECKS = [
+  ['F01', 'file', 'stop', 'File has no data rows', 'Nothing to analyse. The app explains what to export.'],
+  ['F02', 'file', 'fix', 'Text encoding is not UTF-8', 'UTF-16 and Windows-1252 files are decoded automatically.'],
+  ['F03', 'file', 'fix', 'Excel file (.xlsx or .xls)', 'The first sheet is read as a table.'],
+  ['F04', 'file', 'fix', 'Header row is not the first line', 'Title lines above the header are skipped.'],
+  ['F05', 'file', 'fix', 'Column names differ from the template', 'Matched by name, then by keyword; you can still change the mapping.'],
+  ['F06', 'file', 'fix', 'Latitude and longitude are in one column', 'Split into two columns.'],
+  ['F07', 'file', 'fix', 'Numbers use decimal commas, thousands separators, % signs or spaces', 'Cleaned before reading.'],
+  ['F08', 'file', 'stop', 'No usable order rows after all checks', 'Shows the top reasons and how to fix the export.'],
+  ['F09', 'file', 'stop', 'A required column cannot be found', 'Names the missing column and the closest headers in the file.'],
+  ['F10', 'file', 'info', 'More than 500,000 rows', 'Allowed; analysis may take a few seconds longer.'],
+  ['O01', 'orders', 'drop', 'Latitude or longitude blank, "null" or not a number', 'Row dropped.'],
+  ['O02', 'orders', 'drop', 'Latitude or longitude outside the valid range, or exactly 0,0', 'Row dropped.'],
+  ['O03', 'orders', 'fix', 'Latitude and longitude swapped', 'Swapped back when most rows look swapped.'],
+  ['O04', 'orders', 'drop', 'Lab ID blank', 'Row dropped.'],
+  ['O05', 'orders', 'drop', 'City, PIN or order date blank (strict mode only)', 'Row dropped when Strict mode is on.'],
+  ['O06', 'orders', 'info', 'Order date unreadable', 'Row kept; it is left out only while a date range is applied.'],
+  ['O07', 'orders', 'fix', 'Order date is an Excel serial number', 'Converted to a calendar date.'],
+  ['O08', 'orders', 'ask', 'Lab ID not found in the lab file', 'Asked when 1% of orders or 50 orders are affected (drop them, or assign to the nearest lab); below that they are dropped.'],
+  ['O09', 'orders', 'ask', 'No lab ID column in the order file', 'Asked: assign every order to its nearest lab.'],
+  ['O10', 'orders', 'ask', 'Repeated order IDs', 'Asked when 0.5% of rows are affected: keep all or keep the first only.'],
+  ['O11', 'orders', 'ask', 'Order dates mostly unreadable', 'Asked when 20% or more are unreadable: keep rows and skip the date filter, or leave dates out.'],
+  ['O12', 'orders', 'drop', 'Customer farther than the limit from the assigned lab', 'Left out of every figure (Parameters, default 50 km, 0 turns it off).'],
+  ['O13', 'orders', 'fix', 'City spelled differently (case, Bengaluru, Gurugram)', 'Merged into one city.'],
+  ['O14', 'orders', 'fix', 'All orders beyond the distance limit', 'The distance limit is switched off so the analysis can run.'],
+  ['L01', 'labs', 'drop', 'Lab ID blank', 'Row dropped.'],
+  ['L02', 'labs', 'drop', 'Lab latitude or longitude missing or invalid', 'Row dropped.'],
+  ['L03', 'labs', 'ask', 'Same lab ID on several rows', 'Identical rows are merged silently. If they disagree you choose which to keep.'],
+  ['L04', 'labs', 'ask', 'Assured / Non-Assured blank or not recognised', 'You choose: treat as Non-Assured, as Assured, or drop those labs.'],
+  ['L05', 'labs', 'ask', 'No Assured / Non-Assured column', 'You choose how to treat every lab.'],
+  ['L06', 'labs', 'default', 'TAT breach blank or not a number', 'Default value used (Parameters, 30%). Never used as grounds to close a lab.'],
+  ['L07', 'labs', 'fix', 'TAT breach given as a fraction (0 to 1)', 'Multiplied by 100.'],
+  ['L08', 'labs', 'default', 'TAT breach below 0 or above 100', 'Treated as missing; default used.'],
+  ['L09', 'labs', 'default', 'NPS blank, "No responses" or outside -100 to 100', 'Default value used (Parameters, 40). Never used as grounds to close a lab.'],
+  ['L10', 'labs', 'drop', 'City or PIN blank (strict mode only)', 'Row dropped when Strict mode is on.'],
+  ['L11', 'labs', 'ask', 'Lab far from every other lab in its city', 'Asked: keep (coordinates may be right and the city tag wrong) or drop the lab.'],
+  ['L12', 'labs', 'fix', 'Optional numbers invalid (NPS responses, TAT orders, capacity)', 'The field is ignored for that lab.'],
+  ['L13', 'labs', 'fix', 'PIN stored as a number such as 110092.0', 'Cleaned to 110092.'],
+  ['L14', 'labs', 'fix', 'Status written as Assured Lab, Non-Assured Lab, Y or N', 'Mapped automatically.'],
+  ['J01', 'join', 'info', 'Lab has no orders in the period', 'Kept; shown with zero orders.'],
+  ['J02', 'join', 'info', 'Orders in a city with no lab', 'Kept; they appear as underserved.']
+].map(a => ({ id: a[0], scope: a[1], action: a[2], title: a[3], rule: a[4] }));
+const CHK = Object.fromEntries(CHECKS.map(c => [c.id, c]));
+
+/* ------------------------------------------------------------ small helpers */
+const NULLS = new Set(['', 'null', 'none', 'nan', 'na', 'n/a', 'nil', '-', '--', '#n/a', '#value!', 'undefined', 'no responses', 'no response', 'not available', 'not applicable']);
+function toNum(v) {
+  if (v == null) return NaN; if (typeof v === 'number') return isFinite(v) ? v : NaN;
+  let s = String(v).replace(/ /g, ' ').trim().replace(/^["']+|["']+$/g, '').trim();
+  if (NULLS.has(s.toLowerCase())) return NaN;
+  s = s.replace(/%$/, '').replace(/\s/g, '');
+  if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, ''); else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  const x = Number(s); return isFinite(x) ? x : NaN;
+}
+const blank = v => v == null || NULLS.has(String(v).trim().toLowerCase());
+const CITY_ALIAS = { bengaluru: 'bangalore', bangaluru: 'bangalore', gurugram: 'gurgaon' };
+const canon = s => { const a = CITY_ALIAS[s.toLowerCase()]; return a ? a[0].toUpperCase() + a.slice(1) : s; };
+const cityKey = s => { const k = s.toLowerCase().replace(/\s+/g, ' ').trim(); return CITY_ALIAS[k] || k; };
+function sdist(la1, lo1, la2, lo2) { return E.hav(la1, lo1, la2, lo2); }
+function add(log, id, n, ex) { if (!n) return; const e = log[id] || (log[id] = { n: 0, ex: [] }); e.n += n || 1; if (ex != null && e.ex.length < 4 && e.ex.indexOf(ex) < 0) e.ex.push(ex); }
+function medianOf(a) { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; }
+
+/* -------------------------------------------------------------- read a file */
+function decodeBuffer(buf) {
+  const u = new Uint8Array(buf); let note = null, text;
+  if (u.length > 1 && u[0] === 0xFF && u[1] === 0xFE) { text = new TextDecoder('utf-16le').decode(u); note = 'F02'; }
+  else if (u.length > 1 && u[0] === 0xFE && u[1] === 0xFF) { text = new TextDecoder('utf-16be').decode(u); note = 'F02'; }
+  else {
+    text = new TextDecoder('utf-8').decode(u);
+    if (text.indexOf(String.fromCharCode(0xFFFD)) >= 0) { try { text = new TextDecoder('windows-1252').decode(u); note = 'F02'; } catch (e) { } }
+  }
+  return { text, note };
+}
+function pickHeaderRow(all, schema) {
+  let best = 0, bestScore = -1;
+  for (let i = 0; i < Math.min(all.length, 12); i++) {
+    const m = E.detectMapping(all[i].map(x => String(x).trim()), schema); const sc = Object.values(m).filter(v => v >= 0).length;
+    if (sc > bestScore) { bestScore = sc; best = i; }
+  }
+  return best;
+}
+/* returns { headers, rows, notes:[ids] } or { error } ; text already decoded */
+function readTableText(text, schema) {
+  const notes = [];
+  const t = E.parseCSV(text); const all = [t.headers].concat(t.rows);
+  const h = pickHeaderRow(all, schema);
+  if (h > 0) notes.push('F04');
+  const headers = all[h].map(x => String(x).trim()), rows = all.slice(h + 1).filter(r => r.some(c => String(c).trim() !== ''));
+  if (!headers.length || !rows.length) return { error: 'F01', notes };
+  return { headers, rows, notes };
+}
+
+/* ------------------------------------------------ mapping, fuzzy and combined */
+const fuzzyHints = {
+  orders: { lat: ['lat'], lng: ['lon', 'lng', 'long'], lab: ['lab'], date: ['date'], pin: ['pin', 'zip', 'postal'], city: ['city'], id: ['order'] },
+  labs: { id: ['labid', 'labcode', 'id'], name: ['name'], lat: ['lat'], lng: ['lon', 'lng', 'long'], city: ['city'], pin: ['pin', 'zip', 'postal'], breach: ['breach', 'tat'], nps: ['nps'], status: ['status', 'assured', 'type', 'tag'] }
+};
+function smartMapping(tbl, kind) {
+  const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA; const map = E.detectMapping(tbl.headers, schema); const nh = tbl.headers.map(h => String(h).toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const used = new Set(Object.values(map).filter(v => v >= 0));
+  const order = kind === 'orders' ? ['lat', 'lng', 'lab', 'date', 'pin', 'city', 'id'] : ['id', 'lat', 'lng', 'breach', 'nps', 'status', 'city', 'pin', 'name'];
+  for (const k of order) {
+    if (map[k] >= 0) continue;
+    for (const hint of fuzzyHints[kind][k] || []) {
+      const idx = nh.findIndex((h, i) => !used.has(i) && h.includes(hint) && !(k === 'lat' && /(long|lng|lon)/.test(h)) && !(k === 'lng' && /(lat)/.test(h) && !/long/.test(h)) && !(k === 'id' && kind === 'orders' && /lab/.test(h)));
+      if (idx >= 0) { map[k] = idx; used.add(idx); break; }
+    }
+  }
+  return map;
+}
+const COMBO = /^\s*-?\d+(\.\d+)?\s*[,;|\/\s]\s*-?\d+(\.\d+)?\s*$/;
+function splitCombined(tbl, map, notes) {
+  if (map.lat >= 0 && map.lng >= 0) return { tbl, map };
+  const nh = tbl.headers.map(h => String(h).toLowerCase().replace(/[^a-z0-9]/g, ''));
+  let col = nh.findIndex(h => ['latlong', 'latlng', 'latitudelongitude', 'location', 'coordinates', 'coords', 'geo', 'geolocation', 'latlon'].includes(h));
+  if (col < 0) col = tbl.headers.findIndex((_, i) => { const s = tbl.rows.slice(0, 20).map(r => r[i]); return s.filter(x => x != null && String(x).trim() !== '').length >= 3 && s.filter(x => x != null && String(x).trim() !== '').every(x => COMBO.test(String(x))); });
+  if (col < 0) return { tbl, map };
+  const rows = tbl.rows.map(r => { const m = String(r[col] == null ? '' : r[col]).trim().match(/(-?\d+(?:\.\d+)?)\D+?(-?\d+(?:\.\d+)?)/); return r.concat(m ? [m[1], m[2]] : ['', '']); });
+  const m2 = Object.assign({}, map); m2.lat = tbl.headers.length; m2.lng = tbl.headers.length + 1; notes.push('F06');
+  return { tbl: { headers: tbl.headers.concat(['latitude (split)', 'longitude (split)']), rows }, map: m2 };
+}
+
+/* --------------------------------------------------------------- status */
+function parseStatus(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  if (!s) return null;
+  if (/^(non|not|un|n$|no|false|0)/.test(s) || s.includes('non')) return 'N';
+  if (s.includes('assured') || /^(a|yes|y|true|1)$/.test(s)) return 'A';
+  return null;
+}
+
+/* ----------------------------------------------------------- parse orders */
+function parseOrders(tbl, map, opts) {
+  opts = opts || {}; const rows = tbl.rows, n0 = rows.length, log = {}, gi = k => map[k];
+  const iLat = gi('lat'), iLng = gi('lng'), noLabCol = gi('lab') == null || gi('lab') < 0;
+  const lat = new Float64Array(n0), lng = new Float64Array(n0), labKey = new Int32Array(n0), city = new Int16Array(n0), pin = new Int32Array(n0), day = new Int32Array(n0).fill(-1), w = new Float32Array(n0).fill(1);
+  const cities = [], cityIdx = new Map(), pins = [], pinIdx = new Map(), labKeyList = [], labKeyIdx = new Map(), keyCount = [];
+  let n = 0, anyDate = false, swp = 0, nrm = 0, dateLike = 0, dateLikeEx = null;
+  for (let r = 0; r < n0; r++) { const a = toNum(rows[r][iLat]), b = toNum(rows[r][iLng]); if (!isFinite(a) || !isFinite(b)) continue; if (Math.abs(a) > 1000) { dateLike++; if (dateLikeEx == null) dateLikeEx = Math.round(a); } else if (a >= 68 && a <= 98 && b >= 6 && b <= 38) swp++; else if (a >= 6 && a <= 38 && b >= 68 && b <= 98) nrm++; }
+  const swapped = swp > 0 && swp > 3 * nrm;
+  if (swapped) add(log, 'O03', swp);
+  const seenId = new Set(); let dupIds = 0, anyDateCol = gi('date') >= 0, nDateTried = 0, nDateBad = 0;
+  const useDates = anyDateCol && !opts.ignoreDates;
+  for (let r = 0; r < n0; r++) {
+    const row = rows[r]; let la = toNum(row[iLat]), lo = toNum(row[iLng]);
+    if (!isFinite(la) || !isFinite(lo)) { add(log, 'O01', 1, dateLike > 0.3 * n0 && dateLikeEx != null ? 'latitude column holds values like ' + dateLikeEx + ', which look like dates or IDs' : null); continue; }
+    if (swapped) { const t = la; la = lo; lo = t; }
+    if (!(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || (la === 0 && lo === 0)) { add(log, 'O02', 1, Math.abs(la) > 1000 && dateLike > 0.3 * n0 ? 'the latitude column holds values like ' + dateLikeEx + ', which look like dates or IDs' : null); continue; }
+    let lk = noLabCol ? '__auto__' : String(row[gi('lab')] == null ? '' : row[gi('lab')]).trim();
+    if (!noLabCol && blank(lk)) { add(log, 'O04', 1); continue; }
+    if (opts.strict && ((gi('city') >= 0 && blank(row[gi('city')])) || (gi('pin') >= 0 && blank(row[gi('pin')])) || (useDates && E.parseDay(row[gi('date')]) < 0))) { add(log, 'O05', 1); continue; }
+    if (gi('id') >= 0 && !blank(row[gi('id')])) { const oid = String(row[gi('id')]).trim(); if (seenId.has(oid)) { dupIds++; if (opts.dupOrders === 'first') continue; } else seenId.add(oid); }
+    let ki = labKeyIdx.get(lk.toLowerCase()); if (ki === undefined) { ki = labKeyList.length; labKeyList.push(lk); labKeyIdx.set(lk.toLowerCase(), ki); keyCount.push(0); } keyCount[ki]++;
+    let cn = gi('city') >= 0 ? String(row[gi('city')] == null ? '' : row[gi('city')]).replace(/\s+/g, ' ').trim() : ''; if (blank(cn)) cn = 'Unknown';
+    const ck = cityKey(cn); let ci = cityIdx.get(ck); if (ci === undefined) { ci = cities.length; cities.push(canon(cn)); cityIdx.set(ck, ci); }
+    if (cities[ci] !== cn) add(log, 'O13', 1, cn + ' to ' + cities[ci]);
+    let pn = gi('pin') >= 0 ? String(row[gi('pin')] == null ? '' : row[gi('pin')]).trim().replace(/\.0+$/, '') : ''; if (blank(pn)) pn = '(no PIN)';
+    let pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); }
+    if (useDates) {
+      const raw = row[gi('date')]; nDateTried++;
+      const d = E.parseDay(raw); if (d < 0) { nDateBad++; add(log, 'O06', 1); } else { day[n] = d; anyDate = true; if (/^\d{5}(\.\d+)?$/.test(String(raw).trim())) add(log, 'O07', 1, String(raw).trim()); }
+    }
+    lat[n] = la; lng[n] = lo; labKey[n] = ki; city[n] = ci; pin[n] = pi; n++;
+  }
+  if (dupIds) add(log, 'O10', dupIds);
+  const cut = a => a.slice(0, n);
+  const out = { n, lat: cut(lat), lng: cut(lng), labKey: cut(labKey), city: cut(city), pin: cut(pin), day: cut(day), w: cut(w), cities, pins, labKeyList, keyCount, hasDate: anyDate, rowsRead: n0, log, noLabCol, dupIds, nDateTried, nDateBad, warn: [] };
+  out.warn = describe(log).map(x => x.text);
+  if (!anyDateCol || opts.ignoreDates) out.warn.push('No order date in use. Date filter is off and the monthly rate uses "Data covers N months" from Parameters.');
+  return out;
+}
+
+/* ------------------------------------------------------------- parse labs */
+function parseLabs(tbl, map, cities, pins, opts) {
+  opts = opts || {}; const gi = k => map[k] == null ? -1 : map[k], log = {}, labs = [];
+  const cityIdx = new Map(cities.map((c, i) => [cityKey(c), i])), pinIdx = new Map(pins.map((p, i) => [p, i]));
+  const cand = [];
+  tbl.rows.forEach((row, ri) => {
+    const id = gi('id') >= 0 && row[gi('id')] != null ? String(row[gi('id')]).trim() : '';
+    const name = gi('name') >= 0 && !blank(row[gi('name')]) ? String(row[gi('name')]).trim() : '';
+    if (blank(id)) { add(log, 'L01', 1, name || 'row ' + (ri + 2)); return; }
+    const la = toNum(row[gi('lat')]), lo = toNum(row[gi('lng')]);
+    if (!(la >= -90 && la <= 90 && lo >= -180 && lo <= 180) || (la === 0 && lo === 0)) { add(log, 'L02', 1, name || id); return; }
+    cand.push({ id, name: name || id, la, lo, row });
+  });
+  /* duplicate ids */
+  const groups = new Map(); cand.forEach(c => { const k = c.id.toLowerCase(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(c); });
+  const sig = c => [c.la, c.lo, toNum(c.row[gi('breach')]), toNum(c.row[gi('nps')]), String(c.row[gi('status')]).trim().toLowerCase()].join('|');
+  const dupConflict = []; let dupSame = 0; const keep = [];
+  for (const [k, g] of groups) {
+    if (g.length === 1) { keep.push(g[0]); continue; }
+    const same = g.every(x => sig(x) === sig(g[0]));
+    if (same) { dupSame += g.length - 1; keep.push(g[0]); } else { dupConflict.push({ id: g[0].id, name: g[0].name, rows: g.length }); keep.push(opts.dupLabs === 'last' ? g[g.length - 1] : g[0]); }
+  }
+  if (dupSame) add(log, 'L03', dupSame, 'identical rows merged');
+  if (dupConflict.length) add(log, 'L03', dupConflict.reduce((s, x) => s + x.rows - 1, 0), dupConflict.slice(0, 2).map(x => x.id).join(', '));
+  keep.sort((a, b) => cand.indexOf(a) - cand.indexOf(b));
+  const unknownStatus = new Map(); const noStatusCol = gi('status') < 0; let nfrac = 0;
+  for (const c of keep) {
+    const row = c.row;
+    let st = noStatusCol ? null : parseStatus(row[gi('status')]);
+    if (st == null) {
+      const fb = opts.statusFallback || 'N'; const raw = noStatusCol ? '(no column)' : (String(row[gi('status')] == null ? '' : row[gi('status')]).trim() || '(blank)');
+      unknownStatus.set(raw, (unknownStatus.get(raw) || 0) + 1);
+      if (fb === 'drop') { add(log, noStatusCol ? 'L05' : 'L04', 1, c.name); continue; }
+      st = fb; add(log, noStatusCol ? 'L05' : 'L04', 1, raw);
+    } else if (!/^(assured|non-assured)$/i.test(String(row[gi('status')]).trim())) add(log, 'L14', 1);
+    if (opts.strict && ((gi('city') >= 0 && blank(row[gi('city')])) || (gi('pin') >= 0 && blank(row[gi('pin')])))) { add(log, 'L10', 1, c.name); continue; }
+    let br = gi('breach') >= 0 ? toNum(row[gi('breach')]) : NaN, bv = null;
+    if (!isFinite(br)) add(log, 'L06', 1); else if (br < 0 || br > 100) add(log, 'L08', 1, c.name + ' ' + br); else bv = br;
+    let np = gi('nps') >= 0 ? toNum(row[gi('nps')]) : NaN, nv = null;
+    if (!isFinite(np) || np < -100 || np > 100) add(log, 'L09', 1); else nv = np;
+    let cn = gi('city') >= 0 && !blank(row[gi('city')]) ? String(row[gi('city')]).replace(/\s+/g, ' ').trim() : 'Unknown';
+    const ck = cityKey(cn); let ci = cityIdx.get(ck); if (ci === undefined) { ci = cities.length; cities.push(canon(cn)); cityIdx.set(ck, ci); }
+    let pn = gi('pin') >= 0 && !blank(row[gi('pin')]) ? String(row[gi('pin')]).trim() : ''; if (/\.0+$/.test(pn)) { pn = pn.replace(/\.0+$/, ''); add(log, 'L13', 1); }
+    let pi = -1; if (pn) { pi = pinIdx.get(pn); if (pi === undefined) { pi = pins.length; pins.push(pn); pinIdx.set(pn, pi); } }
+    const opt = k => { if (gi(k) < 0 || blank(row[gi(k)])) return null; const x = toNum(row[gi(k)]); if (!(x > 0)) { add(log, 'L12', 1); return null; } return x; };
+    labs.push({ id: c.id, name: c.name, lat: c.la, lng: c.lo, cityIdx: ci, city: cities[ci], pinIdx: pi, pin: pn, status: st, breach: bv, nps: nv, npsN: opt('npsN'), tatN: opt('tatN'), cap: opt('cap') });
+  }
+  const bs = labs.filter(l => l.breach != null);
+  if (bs.length && bs.some(l => l.breach > 0) && bs.every(l => l.breach <= 1)) { bs.forEach(l => { l.breach *= 100; }); add(log, 'L07', bs.length); }
+  /* far-off labs */
+  const outliers = labOutliers(labs);
+  const out = { labs, log, dupConflict, unknownStatus: [...unknownStatus.entries()].map(([v, n]) => ({ v, n })), noStatusCol, outliers, warn: [] };
+  out.warn = describe(log).map(x => x.text);
+  return out;
+}
+function labOutliers(labs) {
+  const byCity = new Map(); labs.forEach(l => { if (!byCity.has(l.cityIdx)) byCity.set(l.cityIdx, []); byCity.get(l.cityIdx).push(l); });
+  const out = [];
+  for (const [, g] of byCity) {
+    if (g.length < 3) continue; const ml = medianOf(g.map(l => l.lat)), mo = medianOf(g.map(l => l.lng));
+    g.forEach(l => { const km = sdist(l.lat, l.lng, ml, mo); if (km > THRESH.outlierKm) out.push({ id: l.id, name: l.name, city: l.city, km: Math.round(km) }); });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------- messages */
+function describe(log) {
+  const T = {
+    O01: x => x.n.toLocaleString() + ' order rows dropped: latitude or longitude is blank, "null" or not a number' + (x.ex.length ? ' (' + x.ex[0] + ')' : '') + '.',
+    O02: x => x.n.toLocaleString() + ' order rows dropped: latitude or longitude outside the valid range, or exactly 0,0' + (x.ex.length ? ' (' + x.ex[0] + ')' : '') + '.',
+    O03: x => 'Latitude and longitude looked swapped in ' + x.n.toLocaleString() + ' rows, so the two columns were swapped back.',
+    O04: x => x.n.toLocaleString() + ' order rows dropped: lab ID is blank.',
+    O05: x => x.n.toLocaleString() + ' order rows dropped by strict mode: city, PIN or order date is blank or unreadable.',
+    O06: x => x.n.toLocaleString() + ' order rows have an unreadable date. They are kept and left out only while a date range is applied.',
+    O07: x => x.n.toLocaleString() + ' order dates were Excel serial numbers (for example ' + x.ex[0] + ') and were converted.',
+    O10: x => x.n.toLocaleString() + ' rows repeat an order ID already seen.',
+    O13: x => x.n.toLocaleString() + ' rows used a different spelling of a city and were merged (' + x.ex.join('; ') + ').',
+    L01: x => x.n + ' lab rows dropped: lab ID is blank (' + x.ex.join('; ') + ').',
+    L02: x => x.n + ' lab rows dropped: latitude or longitude is missing or invalid (' + x.ex.join('; ') + ').',
+    L03: x => x.n + ' extra rows share a lab ID with another row' + (x.ex.length ? ' (' + x.ex.join('; ') + ')' : '') + '.',
+    L04: x => x.n + ' labs have a blank or unrecognised Assured / Non-Assured value (' + x.ex.join('; ') + ').',
+    L05: x => 'No Assured / Non-Assured column found; ' + x.n + ' labs handled as you chose.',
+    L06: x => x.n + ' labs have no TAT breach %. The default value is used for them (Parameters), and a default is never grounds to close a lab.',
+    L07: () => 'TAT breach values were all between 0 and 1, so they were read as fractions and multiplied by 100.',
+    L08: x => x.n + ' labs have a TAT breach below 0 or above 100 (' + x.ex.join('; ') + '). Treated as missing; the default is used.',
+    L09: x => x.n + ' labs have no usable NPS (blank, "No responses" or outside -100 to 100). The default value is used for them (Parameters), and a default is never grounds to close a lab.',
+    L10: x => x.n + ' lab rows dropped by strict mode: city or PIN is blank.',
+    L12: x => x.n + ' optional lab numbers (NPS responses, TAT orders, capacity) were invalid and ignored.',
+    L13: x => x.n + ' PIN codes had a ".0" suffix that was removed.',
+    L14: x => x.n + ' status values (for example "Assured Lab") were mapped to Assured / Non-Assured.'
+  };
+  return Object.keys(log).filter(k => T[k] && log[k].n > 0).map(k => ({ id: k, n: log[k].n, action: CHK[k].action, text: T[k](log[k]) }));
+}
+
+/* ---------------------------------------------------------------- prepare */
+/* args: { orders:{tbl,map}|null, labs:{tbl,map}|null, D0, cfg }, decisions: {key: value}, opts: {strict}
+   returns { status:'ask', questions } | { status:'stop', title, lines } | { status:'ok', D, report, cfgPatch } */
+function prepare(args, decisions, opts) {
+  decisions = decisions || {}; opts = opts || {}; const notes = [], cfg = Object.assign({}, E.DEFAULTS, args.cfg || {});
+  const stop = (title, lines, id) => ({ status: 'stop', title, lines, id });
+  let oT = null, lT = null, oMap = null, lMap = null;
+  if (args.orders) { const r = splitCombined(args.orders.tbl, args.orders.map, notes); oT = r.tbl; oMap = r.map; }
+  if (args.labs) { const r = splitCombined(args.labs.tbl, args.labs.map, notes); lT = r.tbl; lMap = r.map; }
+  const nameOf = (t, i) => t && i >= 0 ? t.headers[i] : null;
+  /* required columns */
+  if (oT) { const miss = ['lat', 'lng'].filter(k => oMap[k] == null || oMap[k] < 0); if (miss.length) return stop('The order file needs ' + miss.map(k => k === 'lat' ? 'a latitude column' : 'a longitude column').join(' and '), ['Closest headers in your file: ' + oT.headers.slice(0, 12).join(', ') + '.', 'Pick the right column in the mapping above, or export the orders with latitude and longitude columns (one column "12.97, 77.59" is also accepted).'], 'F09'); }
+  if (lT) { const miss = ['id', 'lat', 'lng'].filter(k => lMap[k] == null || lMap[k] < 0); if (miss.length) return stop('The lab file needs ' + miss.map(k => ({ id: 'a lab ID column', lat: 'a latitude column', lng: 'a longitude column' })[k]).join(', '), ['Closest headers in your file: ' + lT.headers.slice(0, 12).join(', ') + '.', 'Pick the right column in the mapping above, or add the missing column to the export.'], 'F09'); }
+  let ord, labsP;
+  if (oT) ord = parseOrders(oT, oMap, { strict: opts.strict, dupOrders: decisions.dupOrders, ignoreDates: decisions.dates === 'ignore' }); else ord = ordFromD(args.D0);
+  if (lT) labsP = parseLabs(lT, lMap, ord.cities, ord.pins, { strict: opts.strict, dupLabs: decisions.dupLabs, statusFallback: decisions.status });
+  else { const t = labsToTableD(args.D0.labs); labsP = parseLabs(t.tbl, t.map, ord.cities, ord.pins, {}); labsP.log = {}; labsP.warn = []; }
+  if (oT && ord.n === 0) {
+    const lines = describe(ord.log).map(x => x.text); lines.push('Orders must have a latitude and longitude (for example 28.55 and 77.30) and a lab ID.');
+    return stop('No usable order rows after the checks', lines, 'F08');
+  }
+  if (!labsP.labs.length) return stop('No usable lab rows after the checks', describe(labsP.log).map(x => x.text).concat(['Labs need an ID, a latitude and a longitude.']), 'F08');
+  /* outlier labs removal (decision) */
+  let labs = labsP.labs; const outliers = labsP.outliers;
+  if (decisions.outliers === 'drop' && outliers.length) { const ids = new Set(outliers.map(o => o.id)); labs = labs.filter(l => !ids.has(l.id)); }
+  /* unknown lab ids */
+  const labIds = new Set(labs.map(l => String(l.id).trim().toLowerCase())); let unknownN = 0; const unknownEx = [];
+  ord.labKeyList.forEach((k, ki) => { if (k !== '__auto__' && !labIds.has(String(k).trim().toLowerCase())) { unknownN += ord.keyCount[ki]; if (unknownEx.length < 5) unknownEx.push(k); } });
+  /* questions */
+  const Q = [];
+  if (labsP.dupConflict.length && decisions.dupLabs == null) Q.push({ id: 'dupLabs', check: 'L03', title: labsP.dupConflict.length + ' lab IDs appear on several rows with different values', detail: 'For example ' + labsP.dupConflict.slice(0, 3).map(x => x.id + ' (' + x.name + ')').join(', ') + '.', options: [['first', 'Keep the first row of each (recommended)', true], ['last', 'Keep the last row of each']] });
+  if ((labsP.unknownStatus.length) && decisions.status == null) { const nb = labsP.noStatusCol; Q.push({ id: 'status', check: nb ? 'L05' : 'L04', title: nb ? 'The lab file has no Assured / Non-Assured column' : labsP.unknownStatus.reduce((s, x) => s + x.n, 0) + ' labs have a blank or unrecognised Assured / Non-Assured value', detail: nb ? 'Every lab needs a status for the upgrade and closure logic.' : 'Values found: ' + labsP.unknownStatus.slice(0, 6).map(x => '"' + x.v + '" (' + x.n + ')').join(', ') + '.', options: nb ? [['N', 'Treat every lab as Non-Assured (recommended)', true], ['A', 'Treat every lab as Assured']] : [['N', 'Treat them as Non-Assured (recommended)', true], ['A', 'Treat them as Assured'], ['drop', 'Drop those labs and their orders']] }); }
+  if (oT && ord.noLabCol && decisions.noLabCol == null) Q.push({ id: 'noLabCol', check: 'O09', title: 'The order file has no lab ID column', detail: 'Orders cannot be tied to the lab that served them.', options: [['nearest', 'Assign every order to its nearest lab (recommended). Routing effects will not show.', true]] });
+  if (unknownN > 0 && decisions.unknownLab == null && !ord.noLabCol) { const share = 100 * unknownN / Math.max(1, ord.n); if (share >= THRESH.unknownLabPct || unknownN >= THRESH.unknownLabMin) Q.push({ id: 'unknownLab', check: 'O08', title: unknownN.toLocaleString() + ' orders (' + share.toFixed(1) + '%) point to lab IDs that are not in the lab file', detail: 'Examples: ' + unknownEx.join(', ') + '.', options: [['drop', 'Drop those orders (recommended)', true], ['nearest', 'Assign them to their nearest lab']] }); }
+  if (ord.dupIds && decisions.dupOrders == null && 100 * ord.dupIds / Math.max(1, ord.rowsRead) >= THRESH.dupOrderPct) Q.push({ id: 'dupOrders', check: 'O10', title: ord.dupIds.toLocaleString() + ' rows repeat an order ID', detail: 'An order can legitimately have several tests, or it can be a duplicate export.', options: [['keep', 'Keep every row (recommended)', true], ['first', 'Keep only the first row of each order ID']] });
+  if (ord.nDateTried && decisions.dates == null && 100 * ord.nDateBad / ord.nDateTried >= THRESH.dateBadPct) Q.push({ id: 'dates', check: 'O11', title: ord.nDateBad.toLocaleString() + ' of ' + ord.nDateTried.toLocaleString() + ' order dates cannot be read', detail: 'Date filtering would leave those rows out.', options: [['keep', 'Keep the rows and use the date filter only where dates are readable', true], ['ignore', 'Ignore the date column altogether']] });
+  if (outliers.length && decisions.outliers == null) Q.push({ id: 'outliers', check: 'L11', title: outliers.length + (outliers.length > 1 ? ' labs are' : ' lab is') + ' far from every other lab in its city', detail: outliers.slice(0, 4).map(o => o.name + ' (' + o.city + ', ' + o.km + ' km out)').join('; ') + '. Either the coordinates or the city tag is wrong.', options: [['keep', 'Keep them (recommended if only the city tag is wrong)', true], ['drop', 'Drop them and their orders']] });
+  if (Q.length) return { status: 'ask', questions: Q };
+  /* assemble */
+  const D = E.assemble(ord, labs, { label: 'Uploaded: ' + (args.names || []).join(' + ') });
+  D.cities = ord.cities; D.pins = ord.pins; D.autoAll = !!ord.noLabCol; D.assignUnknown = decisions.unknownLab === 'nearest';
+  E.finalize(D);
+  /* report */
+  const log = {}; const merge = (src) => Object.keys(src || {}).forEach(k => { log[k] = src[k]; });
+  merge(ord.log); merge(labsP.log);
+  if (unknownN > 0 && !ord.noLabCol) log.O08 = { n: unknownN, ex: unknownEx };
+  const report = describe(log); notes.forEach(id => report.push({ id, n: 1, action: CHK[id].action, text: CHK[id].title + '. ' + CHK[id].rule }));
+  const text = { O08: () => unknownN.toLocaleString() + ' orders pointed to lab IDs not in the lab file (' + unknownEx.join(', ') + '): ' + (decisions.unknownLab === 'nearest' ? 'assigned to their nearest lab.' : 'dropped.') };
+  report.forEach(r => { if (text[r.id]) r.text = text[r.id](); }); if (log.O08) report.push({ id: 'O08', n: unknownN, action: 'ask', text: text.O08() });
+  if (ord.noLabCol) report.push({ id: 'O09', n: ord.n, action: 'ask', text: 'No lab ID in the orders: every order assigned to its nearest lab.' });
+  if (outliers.length) report.push({ id: 'L11', n: outliers.length, action: 'ask', text: outliers.length + (outliers.length > 1 ? ' labs far from their city: ' : ' lab far from its city: ') + (decisions.outliers === 'drop' ? 'dropped.' : 'kept.') + ' (' + outliers.slice(0, 3).map(o => o.name).join('; ') + ')' });
+  const noOrdersLabs = D.labs.filter((l, j) => !(D.labTotal[j] > 0)); if (noOrdersLabs.length) report.push({ id: 'J01', n: noOrdersLabs.length, action: 'info', text: noOrdersLabs.length + ' labs have no orders in this file.' });
+  const labCities = new Set(D.labs.map(l => l.cityIdx)); const orphan = new Set(); for (let i = 0; i < D.n; i++) if (!labCities.has(D.city[i])) orphan.add(D.cities[D.city[i]]); if (orphan.size) report.push({ id: 'J02', n: orphan.size, action: 'info', text: 'Orders exist in ' + [...orphan].slice(0, 4).join(', ') + ' where no lab is listed; they will show as underserved.' });
+  if (ord.rowsRead > THRESH.bigRows) report.push({ id: 'F10', n: ord.rowsRead, action: 'info', text: ord.rowsRead.toLocaleString() + ' rows read; analysis can take a few seconds.' });
+  /* distance rule must not wipe everything out */
+  let cfgPatch = null;
+  if (cfg.maxCustKm > 0 && D.n > 0) { let ok = 0; for (let i = 0; i < D.n; i++) if (D.lab[i] >= 0 && D.dA[i] * cfg.circuity <= cfg.maxCustKm) { ok++; break; } if (!ok) { cfgPatch = { maxCustKm: 0 }; report.push({ id: 'O14', n: D.n, action: 'fix', text: 'Every order was farther than ' + cfg.maxCustKm + ' km from its lab, so the distance limit was switched off. Check that lab IDs and coordinates match.' }); } }
+  D.warnLink = []; D.warn = report.map(r => r.text);
+  return { status: 'ok', D, report, cfgPatch };
+}
+function ordFromD(D) { return { n: D.n, lat: D.lat, lng: D.lng, labKey: D.labKey, city: D.city, pin: D.pin, day: D.day, w: D.w, cities: D.cities.slice(), pins: D.pins.slice(), labKeyList: D.labKeyList, keyCount: (() => { const c = D.labKeyList.map(() => 0); for (let i = 0; i < D.n; i++) c[D.labKey[i]]++; return c; })(), hasDate: D.hasDate, warn: [], log: {}, rowsRead: D.n, dupIds: 0 }; }
+function labsToTableD(labs) {
+  const keys = E.LAB_SCHEMA.map(f => f.key);
+  return { tbl: { headers: keys, rows: labs.map(l => [l.id, l.name, l.lat, l.lng, l.city, l.pin, l.breach == null ? '' : l.breach, l.nps == null ? '' : l.nps, l.status === 'A' ? 'Assured' : 'Non-Assured', l.npsN == null ? '' : l.npsN, l.tatN == null ? '' : l.tatN, l.cap == null ? '' : l.cap]) }, map: Object.fromEntries(keys.map((k, i) => [k, i])) };
+}
+
+const API = { THRESH, CHECKS, toNum, parseStatus, parseOrders, parseLabs, labOutliers, describe, prepare, decodeBuffer, readTableText, smartMapping, splitCombined, labsToTableD };
+Object.assign(E, { parseOrders, parseLabs, parseStatus, toNum, Ingest: API });
+if (typeof module !== 'undefined' && module.exports) module.exports = E; else root.Ingest = API;
+})(typeof window !== 'undefined' ? window : this);
 
 /* Dummy Delhi NCR data: customers cluster around real neighbourhoods, labs are placed by hand to tell a few stories. */
 (function (root) {
@@ -931,7 +1242,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = API; else 
 const E = window.Engine, Dm = window.Dummy;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const nf = (v, d = 0) => isFinite(v) ? Number(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }) : '-';
+const nf = (v, d = 0) => v != null && isFinite(v) ? Number(v).toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }) : '-';
 const num1 = v => nf(v, 1);
 const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
@@ -1059,7 +1370,7 @@ function wireFilters() {
 }
 function renderFilterNote() {
   const r = S.res, D = S.D, active = S.F.cities || S.F.pins || (D.hasDate && (S.F.dayFrom !== D.dayMin || S.F.dayTo !== D.dayMax));
-  $('filterNote').innerHTML = `<span class="muted" style="font-size:12px">${nf(r.nSel)} order rows in view of ${nf(D.totalOrders)}.` + (S.F.cities || S.F.pins ? ' Lab volumes still count every customer in the date range, so a city or PIN filter does not skew lab decisions.' : '') + '</span>';
+  $('filterNote').innerHTML = `<span class="muted" style="font-size:12px">${nf(r.nSel)} order rows in view of ${nf(D.totalOrders)}.` + (r.farOut > 0 ? ` <b>${nf(r.farOut)} orders left out</b>: more than ${S.cfg.maxCustKm} km from their lab, likely wrong address coordinates (Parameters, Distance and period).` : '') + (S.F.cities || S.F.pins ? ' Lab volumes still count every customer in the date range, so a city or PIN filter does not skew lab decisions.' : '') + '</span>';
 }
 
 /* ---------- summary: headline and KPI tiles ---------- */
@@ -1125,10 +1436,21 @@ const MapView = (function () {
     for (let k = 0; k < sel.length; k += step) add(X[sel[k]], Y[sel[k]]);
     r.labs.forEach(l => { if (l.inScope) add(PX(l.lng), PY(l.lat)); });
     r.sites.forEach(s => add(PX(s.lng), PY(s.lat)));
+    if (Math.max(c - a, d - b) > 400) {
+      /* cities far apart: open on the busiest one, the rest stay one pan or a city filter away */
+      const cnt = new Map(); for (let k = 0; k < sel.length; k += step) cnt.set(D.city[sel[k]], (cnt.get(D.city[sel[k]]) || 0) + 1);
+      let top = -1, tc = 0; for (const [ci, n] of cnt) if (n > tc) { tc = n; top = ci; }
+      if (top >= 0) {
+        a = Infinity; b = Infinity; c = -Infinity; d = -Infinity;
+        for (let k = 0; k < sel.length; k += step) if (D.city[sel[k]] === top) add(X[sel[k]], Y[sel[k]]);
+        r.labs.forEach(l => { if (l.inScope && l.cityIdx === D.labs[l.idx].cityIdx && D.labs[l.idx].cityIdx === top) add(PX(l.lng), PY(l.lat)); });
+        r.sites.forEach(s => { if (s.cityIdx === top || s.city === D.cities[top]) add(PX(s.lng), PY(s.lat)); });
+      }
+    }
     if (!isFinite(a)) { D.labs.forEach(l => add(PX(l.lng), PY(l.lat))); }
     if (!isFinite(a)) return;
     const padX = 70, padY = 90, w = Math.max(c - a, 0.5), h = Math.max(d - b, 0.5);
-    view.cx = (a + c) / 2; view.cy = (b + d) / 2; view.s = Math.max(1.2, Math.min(500, Math.min((W - padX * 2) / w, (H - padY * 2) / h)));
+    view.cx = (a + c) / 2; view.cy = (b + d) / 2; view.s = Math.max(0.15, Math.min(500, Math.min((W - padX * 2) / w, (H - padY * 2) / h)));
     pendingFit = false; requestDraw();
   }
   function requestDraw() { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); }
@@ -1353,7 +1675,7 @@ function renderMapInfo() {
     const l = r.labs[sl.idx]; if (!l) { el.hidden = true; return; }
     h = `<button class="x" type="button" data-act="closeInfo" aria-label="Close">&times;</button><h4>${esc(l.name)}</h4><div>${l.status === 'A' ? '<span class="pill p-blue">Assured</span>' : '<span class="pill p-neutral">Non-Assured</span>'} <span class="muted">${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></div>
     <dl><dt>Orders a month</dt><dd>${nf(l.pm)}</dd><dt>Avg customer distance</dt><dd>${num1(l.avgDist)} km</dd><dt>90th percentile</dt><dd>${num1(l.p90)} km</dd><dt>Beyond ${c.dMax} km</dt><dd>${nf(l.farShare * 100)}%</dd>
-    <dt>TAT breach</dt><dd>${num1(l.breach)}% (${num1(l.breachLo)} to ${num1(l.breachHi)})</dd><dt>NPS</dt><dd>${nf(l.nps)} (${nf(l.npsLo)} to ${nf(l.npsHi)})</dd>${l.util != null ? `<dt>Capacity used</dt><dd>${nf(l.util * 100)}%</dd>` : ''}${isFinite(l.score) ? `<dt>Score</dt><dd>${nf(l.score)}</dd>` : ''}</dl>`;
+    <dt>TAT breach</dt><dd>${num1(l.breach)}% ${l.breachImp ? '(default, no data)' : '(' + num1(l.breachLo) + ' to ' + num1(l.breachHi) + ')'}</dd><dt>NPS</dt><dd>${nf(l.nps)} ${l.npsImp ? '(default, no data)' : '(' + nf(l.npsLo) + ' to ' + nf(l.npsHi) + ')'}</dd>${l.util != null ? `<dt>Capacity used</dt><dd>${nf(l.util * 100)}%</dd>` : ''}${isFinite(l.score) ? `<dt>Score</dt><dd>${nf(l.score)}</dd>` : ''}</dl>`;
     if (l.inScope) { if (l.up.bucket !== 'assured') h += `<div>${pillFor(l.up.bucket)}</div><p>${esc(l.up.why)}</p>`; if (l.cl.bucket !== 'keep') h += `<div style="margin-top:8px">${pillFor(l.cl.bucket)}</div><p>${esc(l.cl.why)}</p>`; else if (l.up.bucket === 'assured') h += `<p>${esc(l.cl.why)}</p>`; }
     else h += '<p class="muted">Outside the current city or PIN selection.</p>';
   } else {
@@ -1408,7 +1730,7 @@ PANES.sites = function () {
 function scatter(mode) {
   const r = S.res, c = S.cfg, labs = r.scope; if (!labs.length) return '';
   const Wd = 520, Ht = 290, ml = 40, mr = 12, mt = 10, mb = 36;
-  const xmax = Math.max(40, Math.ceil(Math.max(...labs.map(l => l.breach)) / 5) * 5), ymin = Math.min(-10, Math.floor(Math.min(...labs.map(l => l.nps)) / 10) * 10), ymax = 100;
+  const xmax = Math.max(40, Math.ceil(Math.max(...labs.map(l => l.breach)) / 5) * 5), ymin = Math.min(-10, Math.floor(Math.min(...labs.filter(l => l.nps != null).map(l => l.nps)) / 10) * 10), ymax = 100;
   const X = v => ml + (v / xmax) * (Wd - ml - mr), Y = v => mt + (1 - (v - ymin) / (ymax - ymin)) * (Ht - mt - mb);
   let s = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="TAT breach against NPS for each lab, sized by orders">`;
   for (let v = 0; v <= xmax; v += 10) s += `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="${mt}" y2="${Ht - mb}"/><text x="${X(v)}" y="${Ht - mb + 14}" text-anchor="middle">${v}%</text>`;
@@ -1425,12 +1747,12 @@ function scatter(mode) {
     return { close: ['crit', 1], fix: ['serious', 1], keep: ['ink-3', 1] }[l.cl.bucket] || ['ink-3', 1];
   };
   const flag = l => mode === 'up' ? (l.up.bucket === 'upgrade' || l.up.bucket === 'queue' || l.up.bucket === 'near') : (l.cl.bucket === 'close' || l.cl.bucket === 'fix');
-  labs.slice().sort((a, b) => b.pm - a.pm).forEach(l => {
+  labs.filter(l => l.nps != null).sort((a, b) => b.pm - a.pm).forEach(l => {
     const [cn, fill] = col(l), rr = 3.5 + Math.sqrt(l.pm) * 0.22;
     s += `<circle cx="${X(l.breach)}" cy="${Y(l.nps)}" r="${rr}" data-tip="${esc('<b>' + l.name + '</b><span class="mono">' + (l.status === 'A' ? 'Assured' : 'Non-Assured') + ' · ' + nf(l.pm) + ' orders/mo<br>TAT breach ' + num1(l.breach) + '% · NPS ' + nf(l.nps) + '</span>')}" data-lab="${l.idx}" style="fill:${fill ? 'var(--' + cn + ')' : 'var(--surface)'};fill-opacity:${fill ? .78 : 1};stroke:var(--${cn});stroke-width:${fill ? 1 : 1.8};cursor:pointer"/>`;
   });
   const placed = [];
-  labs.filter(flag).sort((a, b) => a.nps - b.nps).slice(0, 12).forEach(l => {
+  labs.filter(l => l.nps != null && flag(l)).sort((a, b) => a.nps - b.nps).slice(0, 12).forEach(l => {
     const nm = l.name.length > 16 ? l.name.slice(0, 15) + '\u2026' : l.name, w = nm.length * 5.4, x = X(l.breach) + 8 + Math.sqrt(l.pm) * 0.22; let y = Y(l.nps) + 3;
     for (let t = 0; t < 14 && placed.some(p => x < p[0] + p[2] && x + w > p[0] && Math.abs(y - p[1]) < 11); t++) y += 11;
     if (y > Ht - mb - 3) return;
@@ -1472,7 +1794,7 @@ PANES.upgrades = function () {
   <p class="note muted">Assured cap: ${c.assuredCapPct}% of ${nScope} labs is ${allowed} Assured labs. ${r.kpi.assured} today, so ${r.slots} ${r.slots === 1 ? 'slot is' : 'slots are'} free.</p>`;
   h += scatter('up');
   h += rows.length ? '<div class="tw"><table><thead><tr><th>Lab</th><th class="r">Orders / mo</th><th class="r">TAT breach</th><th class="r">NPS</th><th class="r">Score</th><th>Decision</th></tr></thead><tbody>' +
-    rows.map(l => `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">upper ${num1(l.breachHi)}%</span></td><td class="r">${nf(l.nps)}<span class="pm">lower ${nf(l.npsLo)}</span></td><td class="r">${nf(l.score)}</td><td>${pillFor(l.up.bucket)}</td></tr><tr class="click whyrow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td colspan="6">${esc(l.up.why)}</td></tr>`).join('') + '</tbody></table></div>' :
+    rows.map(l => `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">${l.breachImp ? 'default, no data' : 'upper ' + num1(l.breachHi) + '%'}</span></td><td class="r">${nf(l.nps)}<span class="pm">${l.npsImp ? 'default, no data' : 'lower ' + nf(l.npsLo)}</span></td><td class="r">${nf(l.score)}</td><td>${pillFor(l.up.bucket)}</td></tr><tr class="click whyrow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td colspan="6">${esc(l.up.why)}</td></tr>`).join('') + '</tbody></table></div>' :
     '<div class="empty">No labs in the selected groups. Turn a group back on above.</div>';
   return h;
 };
@@ -1487,7 +1809,7 @@ PANES.closures = function () {
   <div class="sumrow"><div class="fchips">${chip('close', 'Close', cnt.close)}${chip('fix', 'Fix or watch', cnt.fix)}${chip('keep', 'Keep', keepN)}</div><button class="btn sm" type="button" data-act="exportCl">Export CSV</button></div>`;
   h += scatter('cl');
   h += rows.length ? '<div class="tw"><table><thead><tr><th>Lab</th><th class="r">Orders / mo</th><th class="r">TAT breach</th><th class="r">NPS</th><th class="r">If closed</th><th>Decision</th></tr></thead><tbody>' +
-    rows.map(l => { const t = l.cl.tests; return `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.status === 'A' ? 'Assured' : 'Non-Assured')}, ${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">lower ${num1(l.breachLo)}%</span></td><td class="r">${nf(l.nps)}<span class="pm">upper ${nf(l.npsHi)}</span></td>
+    rows.map(l => { const t = l.cl.tests; return `<tr class="click trow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td><span class="t">${esc(l.name)}</span><span class="sub">${esc(l.status === 'A' ? 'Assured' : 'Non-Assured')}, ${esc(l.city)}${l.pin ? ', ' + esc(l.pin) : ''}</span></td><td class="r">${nf(l.pm)}</td><td class="r">${num1(l.breach)}%<span class="pm">${l.breachImp ? 'default, no data' : 'lower ' + num1(l.breachLo) + '%'}</span></td><td class="r">${nf(l.nps)}<span class="pm">${l.npsImp ? 'default, no data' : 'upper ' + nf(l.npsHi)}</span></td>
     <td class="r">${t ? (t.addKm >= 0 ? '+' : '') + num1(t.addKm) + ' km<span class="pm">' + nf(t.pushed) + '% beyond ' + c.dMax + ' km</span>' + (t.maxUtil != null ? '<span class="pm">receivers ' + nf(t.maxUtil * 100) + '% full</span>' : '') : '<span class="muted">not tested</span>'}</td><td>${pillFor(l.cl.bucket)}</td></tr><tr class="click whyrow${selRow('lab', l.idx)}" data-sel="lab:${l.idx}"><td colspan="6">${esc(l.cl.why)}</td></tr>`; }).join('') + '</tbody></table></div>' :
     '<div class="empty">Nothing in the selected groups.</div>';
   return h;
@@ -1514,7 +1836,11 @@ const PARAMS = [
   ['Distance and period', [
     ['circuity', 'Road circuity factor', '×', 0.01, 1, 3, 'Road km = straight-line km times this factor. 1.3 to 1.4 is typical for Indian metros.'],
     ['dMax', 'Acceptable travel distance', 'km', 0.5, 1, 100, 'Customers with no lab within this road distance count as underserved.'],
+    ['maxCustKm', 'Ignore orders farther than', 'km road', 1, 0, 1000, 'Orders whose customer is farther than this from their assigned lab are treated as bad coordinates and left out of every figure. 0 turns the rule off.'],
     ['dataMonths', 'Data covers', 'months', 0.5, 0.25, 60, 'Used for monthly rates only when the order file has no date column.']]],
+  ['Missing lab data', [
+    ['defNps', 'Default NPS when missing', '', 1, -100, 100, 'Used for labs with a blank NPS or "No responses". Never used as grounds to close a lab.'],
+    ['defTat', 'Default TAT breach when missing', '%', 1, 0, 100, 'Used for labs with a blank TAT breach. Never used as grounds to close a lab.']]],
   ['New lab siting', [
     ['gridKm', 'Candidate grid size', 'km', 0.5, 0.5, 10, 'Underserved orders are bucketed into cells of this size to find candidate spots.'],
     ['catchKm', 'Catchment radius', 'km road', 0.5, 1, 30, 'A new lab can capture underserved customers within this road distance.'],
@@ -1605,49 +1931,59 @@ function labsToTable(labs) {
   const keys = E.LAB_SCHEMA.map(f => f.key);
   return { tbl: { headers: keys, rows: labs.map(l => [l.id, l.name, l.lat, l.lng, l.city, l.pin, l.breach, l.nps, l.status === 'A' ? 'Assured' : 'Non-Assured', l.npsN == null ? '' : l.npsN, l.tatN == null ? '' : l.tatN, l.cap == null ? '' : l.cap]) }, map: Object.fromEntries(keys.map((k, i) => [k, i])) };
 }
-async function readFile(kind, file) {
-  busy('Reading ' + file.name); await nextFrame();
-  try {
-    const text = await file.text(); const tbl = E.parseCSV(text); const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
-    if (!tbl.headers.length || !tbl.rows.length) throw new Error('The file has no data rows.');
-    S.up[kind] = { name: file.name, tbl, map: E.detectMapping(tbl.headers, schema) }; S.upMsg = null;
-  } catch (e) { S.up[kind] = null; S.upMsg = { t: 'err', h: 'Could not read ' + esc(file.name) + ': ' + esc(e.message || e) }; }
-  busy(''); renderPane('force');
+const focusMsg = () => setTimeout(() => { const el = document.querySelector('#pane .askq, #pane .alert.err, #pane .alert.ok'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60);
+let xlsxP = null;
+function loadSheetJS() {
+  if (window.XLSX) return Promise.resolve(window.XLSX);
+  if (!xlsxP) xlsxP = new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; s.onload = () => res(window.XLSX); s.onerror = () => { xlsxP = null; rej(new Error('The Excel reader could not be loaded. Save the file as CSV and upload that.')); }; document.head.appendChild(s); });
+  return xlsxP;
 }
-function missingFields(kind) {
-  const u = S.up[kind]; if (!u) return []; const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
-  return schema.filter(f => f.required && (u.map[f.key] == null || u.map[f.key] < 0)).map(f => f.label);
+const IG = E.Ingest;
+async function readFile(kind, file) {
+  busy('Reading ' + file.name); await nextFrame(); S.ask = null; S.decided = {};
+  try {
+    const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA; let text, notes = [];
+    if (/\.(xlsx|xls|xlsm)$/i.test(file.name)) { const X = await loadSheetJS(); const wb = X.read(await file.arrayBuffer(), { type: 'array' }); const ws = wb.Sheets[wb.SheetNames[0]]; text = X.utils.sheet_to_csv(ws, { rawNumbers: true }); notes.push('F03'); }
+    else { const d = IG.decodeBuffer(await file.arrayBuffer()); text = d.text; if (d.note) notes.push(d.note); }
+    const t = IG.readTableText(text, schema);
+    if (t.error) { S.up[kind] = null; S.upMsg = { t: 'err', h: '<b>' + esc(file.name) + ' has no data rows.</b> It needs a header line and at least one row. Export the ' + (kind === 'orders' ? 'orders' : 'labs') + ' again with the columns shown in the template below.' }; }
+    else { const tbl = { headers: t.headers, rows: t.rows }; S.up[kind] = { name: file.name, tbl, map: IG.smartMapping(tbl, kind), notes: notes.concat(t.notes) }; S.upMsg = null; }
+  } catch (e) { S.up[kind] = null; S.upMsg = { t: 'err', h: 'Could not read ' + esc(file.name) + ': ' + esc((e && e.message) || e) + '. Try saving it as CSV.' }; }
+  busy(''); renderPane('force');
 }
 async function applyUploads() {
   const U = S.up; if (!U.orders && !U.labs) return;
-  const miss = missingFields('orders').concat(missingFields('labs'));
-  if (miss.length) { S.upMsg = { t: 'err', h: 'Map these required columns first: ' + esc(miss.join(', ')) + '.' }; renderPane('force'); return; }
-  busy('Analysing your data'); await nextFrame();
+  busy('Checking your data'); await nextFrame();
   try {
-    const D0 = S.D; let ord, pl, lblParts = [];
-    if (U.orders) { ord = E.parseOrders(U.orders.tbl, U.orders.map); lblParts.push(U.orders.name); } else ord = ordFromD(D0);
-    if (!ord.n && U.orders) throw new Error('No valid order rows. Check the latitude, longitude and lab ID columns.');
-    if (U.labs) { pl = E.parseLabs(U.labs.tbl, U.labs.map, ord.cities, ord.pins); lblParts.push(U.labs.name); }
-    else { const lt = labsToTable(D0.labs); pl = E.parseLabs(lt.tbl, lt.map, ord.cities, ord.pins); }
-    if (!pl.labs.length) throw new Error('No valid lab rows. Check lab ID, coordinates, TAT breach, NPS and status.');
-    const D = E.assemble(ord, pl.labs, { label: 'Uploaded: ' + lblParts.join(' + ') }); D.cities = ord.cities; D.pins = ord.pins; E.finalize(D); D.warn = (ord.warn || []).concat(pl.warn);
-    if (!D.totalOrders && D.n && !D.warnLink.length) D.warnLink = [];
-    S.up = { orders: null, labs: null }; setDataset(D);
-    const matched = D.n - 0; S.upMsg = { t: 'ok', h: 'Loaded ' + nf(D.n) + ' order rows and ' + D.labs.length + ' labs.' };
-    busy(''); renderPane('force');
-  } catch (e) { busy(''); S.upMsg = { t: 'err', h: esc(e.message || e) }; renderPane('force'); }
+    const dec = Object.assign({}, S.decided || {}, S.ask ? S.ask.decisions : {});
+    const names = [U.orders && U.orders.name, U.labs && U.labs.name].filter(Boolean);
+    const res = IG.prepare({ orders: U.orders, labs: U.labs, D0: S.D, cfg: S.cfg, names }, dec, { strict: S.strict });
+    busy('');
+    if (res.status === 'ask') { S.decided = dec; S.ask = { questions: res.questions, decisions: Object.fromEntries(res.questions.map(q => [q.id, (q.options.find(o => o[2]) || q.options[0])[0]])) }; S.upMsg = null; renderPane('force'); focusMsg(); return; }
+    S.ask = null; S.decided = {};
+    if (res.status === 'stop') { S.upMsg = { t: 'err', h: '<b>' + esc(res.title) + '.</b> Nothing was changed.' + (res.lines && res.lines.length ? '<ul>' + res.lines.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>' : '') }; renderPane('force'); focusMsg(); return; }
+    if (res.cfgPatch) { Object.assign(S.cfg, res.cfgPatch); saveCfg(); }
+    const D = res.D; D.report = res.report; S.up = { orders: null, labs: null }; setDataset(D);
+    S.upMsg = { t: 'ok', h: 'Loaded ' + nf(D.n) + ' order rows and ' + D.labs.length + ' labs.' };
+    renderPane('force'); focusMsg();
+  } catch (e) { busy(''); S.ask = null; S.upMsg = { t: 'err', h: '<b>Something unexpected stopped the load.</b> Nothing was changed. (' + esc((e && e.message) || e) + ') Try saving both files as CSV, or share the file so the case can be added to the checks.' }; renderPane('force'); focusMsg(); }
 }
 PANES.data = function () {
   const D = S.D, U = S.up;
   const warns = (D.warn || []).concat(D.warnLink || []);
+  const ICON = { drop: 'Dropped', default: 'Default used', fix: 'Fixed', ask: 'You chose', info: 'Note', stop: 'Stopped' };
+  const reportHtml = D.report && D.report.length ? '<ul class="chk">' + D.report.map(r => `<li><span class="pill ${r.action === 'drop' ? 'p-warn' : r.action === 'ask' ? 'p-blue' : 'p-neutral'}">${ICON[r.action] || 'Note'}</span> ${esc(r.text)}</li>`).join('') + '</ul>' : (warns.length ? '<ul>' + warns.map(w => `<li>${esc(w)}</li>`).join('') + '</ul>' : '');
+  const trig = new Set((D.report || []).map(r => r.id));
+  const catalogue = `<details class="chkall"><summary>All ${IG.CHECKS.length} data checks and what the app does for each</summary><div class="tablewrap"><table class="t"><thead><tr><th>Check</th><th>Rule</th><th>This file</th></tr></thead><tbody>${IG.CHECKS.map(c => `<tr><td>${esc(c.title)}</td><td>${esc({ drop: 'Drop row. ', default: 'Use default. ', fix: 'Fix automatically. ', ask: 'Ask you. ', info: 'Note only. ', stop: 'Explain and stop. ' }[c.action] + c.rule)}</td><td>${D.sample ? 'n/a' : trig.has(c.id) ? 'Found' : 'Clear'}</td></tr>`).join('')}</tbody></table></div></details>`;
+  const askHtml = S.ask ? `<div class="alert warn"><b>A few things need your call.</b> The recommended option is selected. Nothing is loaded until you continue.</div>` + S.ask.questions.map(q => `<div class="askq"><b>${esc(q.title)}</b><p class="note">${esc(q.detail || '')}</p>${q.options.map(o => `<label class="radio"><input type="radio" name="q_${q.id}" data-q="${q.id}" value="${esc(o[0])}" ${S.ask.decisions[q.id] === o[0] ? 'checked' : ''}><div><b>${esc(o[1])}</b></div></label>`).join('')}</div>`).join('') + `<div class="sumrow"><button class="btn primary" type="button" data-act="askGo">Continue</button><button class="btn" type="button" data-act="askCancel">Cancel</button></div>` : '';
   const mapUI = kind => {
     const u = U[kind]; if (!u) return ''; const schema = kind === 'orders' ? E.ORDER_SCHEMA : E.LAB_SCHEMA;
-    return `<div class="alert ok">Read <b>${esc(u.name)}</b>: ${nf(u.tbl.rows.length)} rows, ${u.tbl.headers.length} columns. Check the column mapping.</div><div class="mapgrid">` + schema.map(f => `<div><label for="m_${kind}_${f.key}">${esc(f.label)}${f.required ? ' *' : ''}</label><select id="m_${kind}_${f.key}" data-map="${kind}:${f.key}"><option value="-1">(not in file)</option>${u.tbl.headers.map((h, i) => `<option value="${i}" ${u.map[f.key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`).join('') + '</div>';
+    return `<div class="alert ok">Read <b>${esc(u.name)}</b>: ${nf(u.tbl.rows.length)} rows, ${u.tbl.headers.length} columns. Check the column mapping.${u.notes && u.notes.length ? ' ' + esc([...new Set(u.notes)].map(id => (IG.CHECKS.find(c => c.id === id) || {}).title).filter(Boolean).join('; ')) + ' (handled automatically).' : ''}</div><div class="mapgrid">` + schema.map(f => `<div><label for="m_${kind}_${f.key}">${esc(f.label)}${f.required ? ' *' : ''}</label><select id="m_${kind}_${f.key}" data-map="${kind}:${f.key}"><option value="-1">(not in file)</option>${u.tbl.headers.map((h, i) => `<option value="${i}" ${u.map[f.key] === i ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`).join('') + '</div>';
   };
   const hasUp = U.orders || U.labs;
-  return `${S.upMsg ? `<div class="alert ${S.upMsg.t}">${S.upMsg.h}</div>` : ''}
+  return `${askHtml}${S.upMsg ? `<div class="alert ${S.upMsg.t}">${S.upMsg.h}</div>` : ''}
   <div class="alert ${D.sample ? 'warn' : 'ok'}"><b>${esc(D.label)}</b>: ${nf(D.totalOrders)} orders, ${D.labs.length} labs, ${D.cities.filter((c, i) => S.cityOrders[i] > 0).length} cities, ${D.pins.filter((p, i) => S.pinOrders[i] > 0).length} PIN codes${D.hasDate ? ', ' + E.dayToISO(D.dayMin) + ' to ' + E.dayToISO(D.dayMax) : ', no order dates'}.${D.sample ? ' This is generated sample data for Delhi NCR, so the numbers are illustrative.' : ''}
-  ${warns.length ? '<ul>' + warns.map(w => `<li>${esc(w)}</li>`).join('') + '</ul>' : ''}</div>
+  ${reportHtml}</div>${catalogue}
   <p class="note">Upload fresh files to replace the data. You can replace just one file: orders are matched to labs by lab ID. Files must be CSV. Data stays in your browser unless you save a model.</p>
   <div class="drop" data-drop="orders"><h3>Order file <small>one row per order</small></h3>
     <p class="note muted">Needs order ID, latitude, longitude and lab ID. City, order date and PIN code switch on the filters. Order IDs are never stored.</p>
@@ -1655,6 +1991,7 @@ PANES.data = function () {
   <div class="drop" data-drop="labs"><h3>Lab file <small>one row per lab</small></h3>
     <p class="note muted">Needs lab ID, name, latitude, longitude, TAT breach %, NPS and an Assured or Non-Assured status. City and PIN code help the filters. Optional: NPS responses, orders behind the TAT rate, and capacity per month.</p>
     <input type="file" id="fLabs" accept=".csv,.tsv,.txt,text/csv" data-file="labs" aria-label="Lab file">${mapUI('labs')}</div>
+  <label class="radio"><input type="checkbox" id="optStrict" ${S.strict ? 'checked' : ''}><div><b>Strict mode</b><span>Rows missing a required value (order: latitude, longitude, lab ID; lab: ID, latitude, longitude, TAT breach, status) are always dropped. Tick this to also drop rows with a blank city, PIN or order date. A blank NPS or TAT breach never drops a lab; defaults are used (Parameters). Labs dropped this way also drop their orders.</span></div></label>
   <div class="sumrow"><button class="btn primary" type="button" data-act="applyUp" ${hasUp ? '' : 'disabled'}>Load and analyse</button>
   <button class="btn" type="button" data-act="tplOrders">Download order template</button><button class="btn" type="button" data-act="tplLabs">Download lab template</button><button class="btn" type="button" data-act="loadSample">Use sample data</button></div>`;
 };
@@ -1662,6 +1999,8 @@ function wireDrops() {
   const pane = $('pane');
   pane.addEventListener('change', e => {
     const t = e.target;
+    if (t.id === 'optStrict') { S.strict = t.checked; return; }
+    if (t.dataset.q && S.ask) { S.ask.decisions[t.dataset.q] = t.value; return; }
     if (t.dataset.file && t.files[0]) readFile(t.dataset.file, t.files[0]);
     if (t.dataset.map) { const [kind, key] = t.dataset.map.split(':'); if (S.up[kind]) S.up[kind].map[key] = +t.value; }
   });
@@ -1704,7 +2043,7 @@ function wirePane() {
     const a = t.closest('[data-act]'); if (!a) return; const act = a.dataset.act;
     if (act === 'exportSites') exportSites(); else if (act === 'exportUp') exportUp(); else if (act === 'exportCl') exportCl();
     else if (act === 'resetParams') { S.cfg = Object.assign({}, E.DEFAULTS); saveCfg(); renderPane('force'); schedule(20); }
-    else if (act === 'applyUp') applyUploads(); else if (act === 'loadSample') { busy('Preparing sample data'); setTimeout(() => { loadSample(); S.upMsg = null; busy(''); renderPane('force'); }, 30); }
+    else if (act === 'applyUp') { S.ask = null; S.decided = {}; applyUploads(); } else if (act === 'askGo') applyUploads(); else if (act === 'askCancel') { S.ask = null; S.decided = {}; S.upMsg = { t: 'ok', h: 'Cancelled. Nothing was changed.' }; renderPane('force'); } else if (act === 'loadSample') { busy('Preparing sample data'); setTimeout(() => { loadSample(); S.upMsg = null; busy(''); renderPane('force'); }, 30); }
     else if (act === 'tplOrders') downloadTemplate('orders'); else if (act === 'tplLabs') downloadTemplate('labs');
   });
   pane.addEventListener('change', e => { const t = e.target; if (t.dataset.sim) { S.sim[t.dataset.sim] = t.checked; S.sim.cache = null; renderPane('force'); } });
